@@ -181,8 +181,8 @@ begin
 
   select coalesce(sum(hours),0) into v_hours from bookings
    where actor_id = p_actor and shoot_date = p_date and status <> '已取消';
-  if v_hours + p_hours > 6.5 and not p_overtime_ok then
-    raise exception '這場加總 % 小時，超過當天上限 6.5 小時，請縮短時數或先和 Casting 確認超時', v_hours + p_hours;
+  if v_hours + p_hours > 6 and not p_overtime_ok then
+    raise exception '這場加總 % 小時，超過當天上限 6 小時，請縮短時數或先和 Casting 確認超時', v_hours + p_hours;
   end if;
 
   if ex.id is not null and exists(select 1 from bookings where shoot_id = ex.shoot_id and status <> '已取消'
@@ -236,7 +236,7 @@ begin
     if b.role_type = 'KOC' and v_koc is not null then raise exception '這位演員已綁 % 的 KOC，無法恢復', v_koc; end if;
     select coalesce(sum(hours),0) into v_hours from bookings
      where actor_id = b.actor_id and shoot_date = b.shoot_date and status <> '已取消';
-    if v_hours + b.hours > 6.5 then raise exception '恢復後這場會超過 6.5 小時，請先和 Casting 確認'; end if;
+    if v_hours + b.hours > 6 then raise exception '恢復後這場會超過 6 小時，請先和 Casting 確認'; end if;
     select shoot_id into live_shoot from bookings
      where actor_id = b.actor_id and shoot_date = b.shoot_date and status <> '已取消' limit 1;
     if live_shoot is not null then
