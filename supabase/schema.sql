@@ -303,6 +303,19 @@ begin
   return r;
 end $$;
 
+-- ---------- 設定 OA 日（大廣，預約總表直接點選） ----------
+create function public.set_oa_date(p_id text, p_date date)
+returns public.bookings language plpgsql security definer set search_path = public as $$
+declare old date; r bookings;
+begin
+  if my_role() not in ('agency','admin') then raise exception '只有大廣帳號可以設定 OA 日'; end if;
+  select start_date into old from bookings where id = p_id and status <> '已取消';
+  if not found then raise exception '找不到這筆預約，或已取消'; end if;
+  update bookings set start_date = p_date where id = p_id returning * into r;
+  perform log_status(p_id, 'OA日 ' || coalesce(old::text, '未定'), coalesce(p_date::text, '清除'));
+  return r;
+end $$;
+
 -- ---------- 發票日期（大廣行政） ----------
 create function public.set_invoice_date(p_id text, p_date date)
 returns void language plpgsql security definer set search_path = public as $$
@@ -429,7 +442,7 @@ grant execute on function public.my_role(), public.today_tw(), public.open_cycle
   public.create_booking(text,date,numeric,text,text,text,text,text,text,date,text,text,boolean),
   public.set_booking_cancelled(text,boolean),
   public.update_booking(text,text,text,text,numeric,text,text,date,text,text,date,boolean,boolean),
-  public.set_invoice_date(text,date), public.set_shoot_status(text,text),
+  public.set_invoice_date(text,date), public.set_oa_date(text,date), public.set_shoot_status(text,text),
   public.invoice_cycle(int,date), public.uninvoice_cycle(int) to authenticated;
 
 -- ---------- 演員照片（私有，只有登入者看得到） ----------
