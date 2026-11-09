@@ -315,7 +315,8 @@ create policy "管理者可改角色"     on public.profiles   for update to aut
 create policy "登入者可看演員庫"   on public.actors     for select to authenticated using (true);
 create policy "Casting 新增演員"   on public.actors     for insert to authenticated with check (my_role() in ('casting','admin'));
 create policy "Casting 編輯演員"   on public.actors     for update to authenticated using (my_role() in ('casting','admin')) with check (my_role() in ('casting','admin'));
--- 演員不能刪除，只能下架（archived），編號與歷史資料永久保留
+-- 一般只能下架（archived）；管理者可刪除沒有預約紀錄的演員（例如重複建立）。編號由 sequence 產生，刪除後也不會重複使用
+create policy "管理者刪除演員" on public.actors for delete to authenticated using (my_role() = 'admin');
 create policy "登入者可看期數"     on public.cycles     for select to authenticated using (true);
 create policy "登入者可看預約"     on public.bookings   for select to authenticated using (true);
 create policy "登入者可看紀錄"     on public.status_log for select to authenticated using (true);
@@ -325,7 +326,7 @@ create policy "登入者可看紀錄"     on public.status_log for select to aut
 grant usage on schema public to authenticated;
 grant select on public.profiles, public.actors, public.cycles, public.bookings, public.status_log to authenticated;
 grant update (role, team, display_name) on public.profiles to authenticated;
-grant insert, update on public.actors to authenticated;
+grant insert, update, delete on public.actors to authenticated;
 grant usage on sequence public.actor_seq to authenticated;
 revoke all on all tables in schema public from anon;
 revoke execute on all functions in schema public from anon, public;
