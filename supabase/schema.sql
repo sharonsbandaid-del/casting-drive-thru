@@ -327,6 +327,16 @@ begin
   return r;
 end $$;
 
+-- ---------- 備考（大廣，契約一覽直接編輯） ----------
+create function public.set_booking_note(p_id text, p_note text)
+returns void language plpgsql security definer set search_path = public as $$
+begin
+  if my_role() not in ('agency','admin') then raise exception '只有大廣帳號可以編輯備考'; end if;
+  update bookings set note = nullif(trim(p_note), '') where id = p_id;
+  if not found then raise exception '找不到這筆預約'; end if;
+  perform log_status(p_id, '備考', '修改');
+end $$;
+
 -- ---------- 發票日期（大廣行政） ----------
 create function public.set_invoice_date(p_id text, p_date date)
 returns void language plpgsql security definer set search_path = public as $$
@@ -474,7 +484,7 @@ grant execute on function public.my_role(), public.today_tw(), public.open_cycle
   public.create_booking(text,date,numeric,text,text,text,text,text,text,date,text,text,boolean),
   public.set_booking_cancelled(text,boolean),
   public.update_booking(text,text,text,text,numeric,text,text,date,text,text,date,boolean,boolean),
-  public.set_invoice_date(text,date), public.set_oa_date(text,date), public.delete_booking(text,text), public.set_shoot_status(text,text),
+  public.set_invoice_date(text,date), public.set_oa_date(text,date), public.delete_booking(text,text), public.set_booking_note(text,text), public.set_shoot_status(text,text),
   public.invoice_cycle(int,date), public.uninvoice_cycle(int) to authenticated;
 
 -- ---------- 演員照片（私有，只有登入者看得到） ----------
