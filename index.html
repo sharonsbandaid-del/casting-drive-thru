@@ -387,11 +387,12 @@ table.xl td.rem{text-align:left;white-space:normal;min-width:240px}
   </form>
   <form class="auth-card hidden" id="pw-form" novalidate>
     <h1>Casting Drive-Thru</h1>
-    <div class="plat2">設定新密碼</div>
+    <div class="plat2" id="pw-title">設定新密碼</div>
     <label>新密碼（至少 8 碼）<input type="password" id="pw-1" autocomplete="new-password"></label>
     <label>再輸入一次<input type="password" id="pw-2" autocomplete="new-password"></label>
     <div id="pw-msg"></div>
     <button class="btn primary" type="submit">儲存密碼並登入</button>
+    <button class="btn" type="button" id="pw-cancel" style="margin-top:8px">取消</button>
   </form>
 </div>
 <div id="loading" class="loading hidden">資料載入中…</div>
@@ -406,6 +407,7 @@ table.xl td.rem{text-align:left;white-space:normal;min-width:240px}
           <button id="role-agency" data-role="agency" class="on">大廣</button>
         </div>
         <span class="userchip" id="who"></span>
+        <button class="btn logout" id="chpw">改密碼</button>
         <button class="btn logout" id="logout">登出</button>
       </div>
     </div>

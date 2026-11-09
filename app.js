@@ -688,6 +688,7 @@ async function enterApp(){
   if(!user){ showAuth("login"); return; }
   const { data:p, error } = await sb.from("profiles").select("*").eq("id",user.id).single();
   if(error||!p){ showAuth("login"); $("l-msg").innerHTML='<div class="msg err">這個帳號還沒有開通，請聯絡管理者。</div>'; await sb.auth.signOut(); return; }
+  if(user.user_metadata && user.user_metadata.must_change_pw){ forcePw=true; openPw(); return; }
   profile=p; isAdmin = p.role==="admin";
   role = p.role==="casting" ? "casting" : "agency";
   $("viewswitch").classList.toggle("hidden", !isAdmin);
@@ -699,10 +700,17 @@ async function enterApp(){
   cyc = openCycle(); syncForm("product"); renderAll();
 }
 let pwMode = /type=(recovery|invite)/.test(location.hash);
+let forcePw = false;
+function openPw(){
+  $("pw-1").value=""; $("pw-2").value=""; $("pw-msg").innerHTML="";
+  $("pw-title").textContent = forcePw ? "第一次登入，請設定你自己的密碼" : "設定新密碼";
+  $("pw-cancel").classList.toggle("hidden", forcePw || pwMode);
+  showAuth("pw");
+}
 async function boot(){
-  sb.auth.onAuthStateChange((ev)=>{ if(ev==="PASSWORD_RECOVERY"){ pwMode=true; showAuth("pw"); } if(ev==="SIGNED_OUT"){ profile=null; showAuth("login"); } });
+  sb.auth.onAuthStateChange((ev)=>{ if(ev==="PASSWORD_RECOVERY"){ pwMode=true; openPw(); } if(ev==="SIGNED_OUT"){ profile=null; showAuth("login"); } });
   const { data:{ session } } = await sb.auth.getSession();
-  if(session && pwMode){ showAuth("pw"); return; }
+  if(session && pwMode){ openPw(); return; }
   if(session) enterApp(); else showAuth("login");
 }
 $("login-form").addEventListener("submit", async e=>{
@@ -722,10 +730,12 @@ $("pw-form").addEventListener("submit", async e=>{
   e.preventDefault(); const a=$("pw-1").value, b=$("pw-2").value;
   if(a.length<8){ $("pw-msg").innerHTML='<div class="msg err">密碼至少 8 碼。</div>'; return; }
   if(a!==b){ $("pw-msg").innerHTML='<div class="msg err">兩次輸入的密碼不一樣。</div>'; return; }
-  const { error } = await sb.auth.updateUser({ password:a });
+  const { error } = await sb.auth.updateUser({ password:a, data:{ must_change_pw:false } });
   if(error){ $("pw-msg").innerHTML='<div class="msg err">設定失敗：'+esc(errText(error))+'</div>'; return; }
-  pwMode=false; history.replaceState(null,"",location.pathname); enterApp();
+  pwMode=false; forcePw=false; history.replaceState(null,"",location.pathname); enterApp();
 });
+$("pw-cancel").onclick = ()=>{ $("auth").classList.add("hidden"); $("app").classList.remove("hidden"); };
+$("chpw").onclick = ()=>{ forcePw=false; openPw(); };
 $("logout").onclick = async ()=>{ await sb.auth.signOut(); profile=null; actors=[]; bookings=[]; $("l-pass").value=""; $("l-msg").innerHTML=""; showAuth("login"); };
 window.addEventListener("focus", ()=>{ if(profile && !document.querySelector("dialog[open]") && !document.querySelector(".oa-edit")) reload(true); });
 
