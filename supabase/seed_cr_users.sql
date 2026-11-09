@@ -1,8 +1,7 @@
 -- ============================================================
 -- 一次建立 CR 成員帳號（casting-drive-thru 專案專用）
 -- 1. 已經存在的 email 會跳過（不會改到密碼）
--- 2. 新帳號會產生一組隨機臨時密碼，第一次登入時會要求改密碼
--- 3. 執行後下方結果會列出每個人的臨時密碼，請個別私訊給本人
+-- 2. 新帳號的臨時密碼一律是 123456，第一次登入時會強制改密碼
 -- ============================================================
 create extension if not exists pgcrypto with schema extensions;
 
@@ -38,11 +37,8 @@ insert into _seed (email, name, team, role) values
 -- 已經有帳號的人：沿用原本的 id，不產生密碼
 update _seed s set uid = u.id from auth.users u where lower(u.email) = lower(s.email);
 
--- 新帳號：產生 id 與 10 碼臨時密碼（去掉容易看錯的字元）
-update _seed set uid = gen_random_uuid(),
-  temp_password = translate(encode(extensions.gen_random_bytes(8), 'base64'), '+/=0OIl', 'xyzabcd')
-where uid is null;
-update _seed set temp_password = left(temp_password, 10) where temp_password is not null;
+-- 新帳號：產生 id，臨時密碼 123456
+update _seed set uid = gen_random_uuid(), temp_password = '123456' where uid is null;
 
 insert into auth.users (instance_id, id, aud, role, email, encrypted_password, email_confirmed_at,
   raw_app_meta_data, raw_user_meta_data, created_at, updated_at,
