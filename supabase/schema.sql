@@ -102,6 +102,7 @@ create table public.bookings (
   second_use      text, ai_use text, comp_ingredient text, comp_effect text,
   shoot_fee       int, overtime_fee int, nda text,
   note            text,
+  invoice_date    date,                         -- 個別發票日期（空白＝沿用期數的請款日）
   status          text not null default '待確認' check (status in ('待確認','已確認','已拍攝','已取消')),
   created_at      timestamptz not null default now()
 );
@@ -200,7 +201,7 @@ begin
     update bookings set status = '待確認' where shoot_id = v_shoot and status = '已確認';
   else
     v_cycle := open_cycle();
-    select 'SH-' || v_yymm || '-' || lpad((count(distinct shoot_id) + 1)::text, 2, '0') into v_shoot
+    select 'SH-' || v_yymm || '-' || lpad((coalesce(max(substring(shoot_id from '[0-9]+$')::int), 0) + 1)::text, 2, '0') into v_shoot
       from bookings where shoot_id like 'SH-' || v_yymm || '-%';
   end if;
   select 'BK-' || v_yymm || '-' || lpad((count(*) + 1)::text, 2, '0') into v_id
@@ -220,12 +221,15 @@ begin
   return r;
 end $$;
 
--- ---------- 修改預約內容（大廣）：演員、商品、拍攝日不能改，要換請取消後重新預約 ----------
+-- ---------- 修改預約內容（大廣）：演員、商品不能改；拍攝日可以改（可整場改期） ----------
 create function public.update_booking(
   p_id text, p_material_no text, p_title text, p_role text, p_hours numeric, p_place text,
-  p_team text, p_start date, p_script text, p_note text, p_overtime_ok boolean default false
+  p_team text, p_start date, p_script text, p_note text,
+  p_date date default null, p_move_all boolean default true, p_overtime_ok boolean default false
 ) returns public.bookings language plpgsql security definer set search_path = public as $$
-declare b bookings; v_koc text; v_others numeric; v_locked boolean; r bookings;
+declare
+  b bookings; v_koc text; v_locked boolean; r bookings; v_date date; v_changed boolean;
+  v_ids text[]; v_target bookings; v_total numeric; v_shoot text; v_cycle int; v_yymm text; x record;
 begin
   if my_role() not in ('agency','admin') then raise exception '只有大廣帳號可以修改預約'; end if;
   perform pg_advisory_xact_lock(hashtext('casting-booking'));
@@ -233,24 +237,82 @@ begin
   if not found then raise exception '找不到這筆預約'; end if;
   if b.status = '已取消' then raise exception '已取消的素材不能修改，請先恢復'; end if;
   if coalesce(trim(p_title),'') = '' then raise exception '請填寫素材篇名'; end if;
+  v_date := coalesce(p_date, b.shoot_date);
+  v_changed := v_date <> b.shoot_date;
   v_locked := b.status = '已拍攝' or is_invoiced(b.cycle_no);
-  if v_locked and (p_role is distinct from b.role_type or p_hours is distinct from b.hours) then
-    raise exception '已拍攝或已請款的素材，時數與拍攝需求不能修改';
+  if v_locked and (p_role is distinct from b.role_type or p_hours is distinct from b.hours or v_changed) then
+    raise exception '已拍攝或已請款的素材，拍攝日期、時數與拍攝需求不能修改';
   end if;
-  v_koc := koc_conflict(b.actor_id, b.product, b.shoot_date, b.id);
-  if p_role = 'KOC' and v_koc is not null then raise exception '這位演員已綁 % 的 KOC，不能改成 KOC', v_koc; end if;
-  select coalesce(sum(hours),0) into v_others from bookings where shoot_id = b.shoot_id and id <> b.id and status <> '已取消';
-  if v_others + p_hours > 6 and not p_overtime_ok then
-    raise exception '這場加總 % 小時，超過當天上限 6 小時', v_others + p_hours;
+
+  -- 這次要移動的素材：整場改期＝同場全部；否則只有這一支
+  if v_changed and p_move_all then
+    select array_agg(id) into v_ids from bookings where shoot_id = b.shoot_id and status <> '已取消';
+  else
+    v_ids := array[b.id];
   end if;
+
+  -- KOC 檢查（移動的每一支）
+  for x in select * from bookings where id = any(v_ids) loop
+    if (case when x.id = b.id then p_role else x.role_type end) = 'KOC' then
+      select product into v_koc from bookings
+       where actor_id = x.actor_id and role_type = 'KOC' and status <> '已取消' and product <> x.product
+         and not (id = any(v_ids))
+         and (coalesce(start_date, shoot_date) + make_interval(months => portrait_months) - interval '1 day')::date >= v_date
+       limit 1;
+      if v_koc is not null then raise exception '這位演員已綁 % 的 KOC，不能在這天拍 KOC', v_koc; end if;
+    end if;
+  end loop;
+
+  -- 時數檢查：目的地那一場
+  if v_changed then
+    select * into v_target from bookings
+     where actor_id = b.actor_id and shoot_date = v_date and status <> '已取消' and not (id = any(v_ids)) limit 1;
+    select coalesce(sum(hours),0) into v_total from bookings
+     where actor_id = b.actor_id and shoot_date = v_date and status <> '已取消' and not (id = any(v_ids));
+    select v_total + coalesce(sum(case when id = b.id then p_hours else hours end),0) into v_total from bookings where id = any(v_ids);
+  else
+    select coalesce(sum(hours),0) + p_hours into v_total from bookings where shoot_id = b.shoot_id and id <> b.id and status <> '已取消';
+  end if;
+  if v_total > 6 and not p_overtime_ok then raise exception '這場加總 % 小時，超過當天上限 6 小時', v_total; end if;
+
   update bookings set material_no = p_material_no, title = p_title, role_type = p_role, hours = p_hours,
          place = p_place, team = p_team, start_date = p_start, script = p_script, note = p_note
-   where id = p_id returning * into r;
-  if p_hours is distinct from b.hours then
-    update bookings set status = '待確認' where shoot_id = b.shoot_id and status = '已確認';   -- 時數變了，請 Casting 重新確認
+   where id = p_id;
+
+  if v_changed then
+    if v_target.id is not null then
+      v_shoot := v_target.shoot_id; v_cycle := v_target.cycle_no;                 -- 併入那天已有的場次
+    elsif p_move_all or not exists(select 1 from bookings where shoot_id = b.shoot_id and status <> '已取消' and id <> b.id) then
+      v_shoot := b.shoot_id; v_cycle := b.cycle_no;                               -- 整場改期：編號與期數不變
+    else
+      v_yymm := to_char(v_date, 'YYMM');                                          -- 從同場拆出：新的一場
+      select 'SH-' || v_yymm || '-' || lpad((coalesce(max(substring(shoot_id from '[0-9]+$')::int), 0) + 1)::text, 2, '0') into v_shoot
+        from bookings where shoot_id like 'SH-' || v_yymm || '-%';
+      v_cycle := case when is_invoiced(b.cycle_no) or cycle_count(b.cycle_no) >= 7 then open_cycle() else b.cycle_no end;
+    end if;
+    for x in select id, shoot_date from bookings where id = any(v_ids) loop
+      update bookings set shoot_date = v_date, shoot_id = v_shoot, cycle_no = v_cycle where id = x.id;
+      perform log_status(x.id, '拍攝日 ' || x.shoot_date, '改期 ' || v_date);
+    end loop;
+    update bookings set status = '待確認' where shoot_id = v_shoot and status = '已確認';
+  elsif p_hours is distinct from b.hours then
+    update bookings set status = '待確認' where shoot_id = b.shoot_id and status = '已確認';
   end if;
   perform log_status(p_id, '內容', '修改');
+  select * into r from bookings where id = p_id;
   return r;
+end $$;
+
+-- ---------- 發票日期（大廣行政） ----------
+create function public.set_invoice_date(p_id text, p_date date)
+returns void language plpgsql security definer set search_path = public as $$
+declare old date;
+begin
+  if my_role() not in ('agency','admin') then raise exception '只有大廣帳號可以修改發票日期'; end if;
+  select invoice_date into old from bookings where id = p_id;
+  if not found then raise exception '找不到這筆預約'; end if;
+  update bookings set invoice_date = p_date where id = p_id;
+  perform log_status(p_id, '發票日期 ' || coalesce(old::text, '（期數請款日）'), coalesce(p_date::text, '改回期數請款日'));
 end $$;
 
 -- ---------- 取消／恢復素材（大廣） ----------
@@ -366,7 +428,8 @@ revoke execute on all functions in schema public from anon, public;
 grant execute on function public.my_role(), public.today_tw(), public.open_cycle(),
   public.create_booking(text,date,numeric,text,text,text,text,text,text,date,text,text,boolean),
   public.set_booking_cancelled(text,boolean),
-  public.update_booking(text,text,text,text,numeric,text,text,date,text,text,boolean), public.set_shoot_status(text,text),
+  public.update_booking(text,text,text,text,numeric,text,text,date,text,text,date,boolean,boolean),
+  public.set_invoice_date(text,date), public.set_shoot_status(text,text),
   public.invoice_cycle(int,date), public.uninvoice_cycle(int) to authenticated;
 
 -- ---------- 演員照片（私有，只有登入者看得到） ----------
