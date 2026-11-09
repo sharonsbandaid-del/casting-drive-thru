@@ -1,0 +1,653 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Casting Drive-Thru｜演員預約平台</title>
+<meta name="robots" content="noindex,nofollow">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@300;400;500;900&family=M+PLUS+Rounded+1c:wght@800&display=swap" rel="stylesheet">
+<style>
+/* Layout: top bar with role switch → quota strip → tabbed workspace (cards / tables) */
+:root{
+  /* Palette: black / yellow / red (fast-food counter feel) */
+  --yellow:#feca1f; --yellow-soft:#FFF4D1; --red:#d7261e; --red-dk:#A81B15; --red-soft:#FDE7E5; --black:#27251f; --white:#ffffff; --grey:#F3F1EF;
+  --bg:#feca1f; --on-bg:#ffffff; --surface:#ffffff; --ink:#27251f; --muted:#6b6461; --line:#e6e0dc;
+  --accent:#D7261E; --accent-soft:#FDE7E5; --on-accent:#ffffff;
+  --ok:#2b8a3e; --warn:#c0670a; --bad:#D7261E; --info:#141414;
+  --display:"Noto Sans TC",system-ui,sans-serif; --body:"Noto Sans TC",system-ui,sans-serif;
+  --mono:"Noto Sans TC",system-ui,sans-serif;
+  --round:"M PLUS Rounded 1c","Noto Sans TC",system-ui,sans-serif;
+  color-scheme:light;
+}
+/* Single theme by design: the brand yellow page is the identity, so no dark variant. */
+  :root{--cond:"Bebas Neue","Noto Sans TC",Impact,sans-serif}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--bg);color:var(--ink);font-family:var(--body);font-weight:300;font-size:14px;line-height:1.6;letter-spacing:.01em}
+strong,b,th,h3,legend{font-weight:500}
+button,input,select,textarea{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.wrap{max-width:1180px;margin:0 auto;padding:20px 20px 60px;display:grid;gap:18px}
+header{display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:space-between}
+h1{font-family:var(--display);font-size:22px;margin:0;text-wrap:balance}
+.sub{color:var(--muted);font-size:13px}
+.role{display:flex;border:1px solid var(--line);border-radius:999px;background:var(--surface);padding:3px}
+.role button{border:0;background:none;padding:6px 14px;border-radius:999px;cursor:pointer;color:var(--muted)}
+.role button.on{background:var(--yellow);color:var(--black)}
+
+.quota{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:14px 16px;display:grid;grid-template-columns:auto 1fr auto;gap:16px;align-items:center}
+.quota .big{font-family:var(--round);font-size:34px;font-variant-numeric:tabular-nums}
+.slots{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:10px}
+.slot{aspect-ratio:1;max-width:92px;width:100%;justify-self:center;border-radius:50%;border:2px dashed #d9cfc9;display:flex;flex-direction:column;align-items:center;justify-content:center;font-size:11px;color:var(--muted);text-align:center;line-height:1.25;position:relative;background:var(--grey)}
+.slot .n{font-family:var(--round);font-size:22px;color:#cfc5bf}
+.slot .d{font-family:var(--round);font-size:15px}
+.slot .nm{font-size:11px;max-width:90%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.slot.used{border:2px solid var(--black)!important}
+.slot.done{border:3px solid var(--red)!important;color:var(--red);transform:rotate(-10deg)}
+.slot.done::before{content:"";position:absolute;inset:5px;border:1.5px solid var(--red);border-radius:50%}
+.slot.done .st{font-family:var(--round);font-size:20px;line-height:1}
+.slot.done .sd{font-size:11px;letter-spacing:.04em}
+.slot.done .rep{color:var(--red)}
+.stamp-title{font-family:var(--round);font-size:15px;color:var(--red)}
+.slot .x,.slot .rep{font-size:10px}
+.slot.used{border-style:solid;background:var(--yellow);color:var(--black);border-color:var(--black)}
+.month{display:flex;gap:6px;align-items:center}
+.month button{border:1px solid var(--line);background:var(--surface);border-radius:8px;width:30px;height:30px;cursor:pointer}
+.tabs{display:flex;gap:4px;border-bottom:1px solid var(--line);flex-wrap:wrap}
+.tabs button{border:0;background:none;padding:10px 14px;cursor:pointer;color:var(--muted);border-bottom:2px solid transparent;margin-bottom:-1px}
+.tabs button.on{color:var(--ink);border-color:var(--yellow);border-bottom-width:3px;font-weight:500}
+.tabs .tag{font-size:11px;color:var(--muted);font-weight:400;margin-left:4px}
+.bar{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.bar .grow{flex:1}
+input[type=text],input[type=number],input[type=date],select,textarea{border:1px solid var(--line);background:var(--surface);border-radius:8px;padding:7px 10px;min-width:0}
+.btn{border:1px solid var(--line);background:var(--surface);border-radius:8px;padding:7px 14px;cursor:pointer}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
+
+.btn.sm{padding:3px 10px;font-size:12px}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:12px}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:12px;display:grid;gap:8px;align-content:start}
+.card.off{opacity:.55}
+.ph{aspect-ratio:4/3;border-radius:8px;display:flex;align-items:flex-end;justify-content:space-between;padding:8px;font-family:var(--mono);font-size:12px;color:#fff}
+.ph b{font-size:30px;font-family:var(--display);line-height:1}
+.name{display:flex;justify-content:space-between;align-items:baseline;gap:6px}
+.name strong{font-size:15px}
+.meta{color:var(--muted);font-size:12px;font-variant-numeric:tabular-nums}
+.chips{display:flex;flex-wrap:wrap;gap:4px}
+.chip{font-size:11px;border-radius:999px;padding:1px 8px;background:var(--accent-soft);color:var(--ink)}
+.pill{font-size:11px;border-radius:999px;padding:2px 9px;border:1px solid currentColor;white-space:nowrap}
+.s-ok{color:var(--ok)} .s-warn{color:var(--warn)} .s-bad{color:var(--bad)} .s-info{color:var(--info)} .s-mute{color:var(--muted)}
+.tblwrap{overflow-x:auto;background:var(--surface);border:1px solid var(--line);border-radius:12px}
+table{border-collapse:collapse;width:100%;min-width:860px}
+th,td{text-align:left;padding:9px 12px;border-bottom:1px solid var(--line);vertical-align:top}
+th{font-size:12px;color:var(--muted);font-weight:500;background:var(--grey)}
+td.num{font-family:var(--mono);font-variant-numeric:tabular-nums}
+tr:last-child td{border-bottom:0}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:16px;display:grid;gap:12px}
+.form{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px 14px}
+.form label{display:grid;gap:4px;font-size:12px;color:var(--muted)}
+.form .wide{grid-column:1/-1}
+.msg{font-size:13px;padding:8px 12px;border-radius:8px}
+.msg.err{background:color-mix(in srgb,var(--bad) 12%,transparent);color:var(--bad)}
+.msg.ok{background:color-mix(in srgb,var(--ok) 12%,transparent);color:var(--ok)}
+.note{font-size:12px;color:var(--muted)}
+dialog{border:1px solid var(--line);border-radius:14px;background:var(--surface);color:var(--ink);padding:18px;width:min(640px,94vw)}
+dialog::backdrop{background:rgba(0,0,0,.35)}
+.spec{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px}
+.spec h3{margin:0 0 6px;font-size:14px}
+.spec ul{margin:0;padding-left:18px;color:var(--muted)}
+.sec{margin:4px 0 -2px;font-size:14px;padding-bottom:6px;border-bottom:1px solid var(--line)}
+.hint{font-size:11px;color:var(--muted)}
+.checks{border:1px solid var(--line);border-radius:8px;padding:8px 12px;display:flex;flex-wrap:wrap;gap:6px 16px;margin:0}
+.checks legend{font-size:12px;color:var(--muted);padding:0 4px}
+.checks label{display:flex;align-items:center;gap:5px;color:var(--ink);font-size:13px}
+input[readonly]{background:var(--grey)}
+table.xl{min-width:1700px}
+table.xl td{white-space:nowrap}
+table.xl td:nth-child(n){white-space:nowrap}
+table.xl th{background:#dce6f1;color:#141414;font-weight:500;text-align:center;border:1px solid var(--line)}
+table.xl th.red{color:#c0392b}
+table.xl td{border:1px solid var(--line);text-align:center;font-size:13px;vertical-align:middle}
+table.xl td.prod{font-weight:500}
+table.xl tr.due td{background:color-mix(in srgb,var(--warn) 14%,transparent)}
+.thumb{width:34px;height:34px;border-radius:6px;display:inline-flex;align-items:center;justify-content:center;color:#fff;font-weight:500}
+.wrap>*{min-width:0}
+table.xl td:nth-child(-n+3),table.xl th{white-space:nowrap}
+table.xl tr td.prod+td,table.xl tr td.prod~td:nth-child(3){white-space:nowrap}
+.msg.info{background:var(--accent-soft);color:var(--ink)}
+.msg.plain{background:var(--grey);color:var(--muted)}
+.slot .x{font-weight:500;color:var(--accent);margin-left:2px}
+tr.shoot td{background:var(--grey);border-top:2px solid var(--line)}
+tr.item td:first-child{padding-left:22px}
+tr.item.gone td{opacity:.5}
+.chip.merge{margin-left:8px;background:var(--red);color:var(--white)}
+.sec .tag{font-size:11px;color:var(--muted);font-weight:400;margin-left:6px}
+.terms{border:1px solid var(--accent);background:var(--accent-soft);border-radius:10px;padding:10px 14px}
+.terms .tsrc{font-size:12px;color:var(--muted);margin-bottom:6px}
+.terms dl{margin:0;display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:6px 16px}
+.terms dt{font-size:11px;color:var(--muted)} .terms dd{margin:0;font-weight:500}
+.tcard{border-top:1px dashed var(--line);padding-top:6px;font-size:12px;color:var(--muted);display:grid;gap:2px}
+.tcard .tt{font-size:11px;color:var(--accent);font-weight:500}
+.tcard strong{color:var(--ink)}
+dialog{max-height:90vh;overflow:auto}
+.chip.koc{background:var(--black);color:var(--yellow);font-weight:500}
+.hbar{display:inline-block;width:110px;height:8px;border-radius:4px;background:var(--line);margin:0 8px 0 14px;vertical-align:middle;overflow:hidden}
+.hbar span{display:block;height:100%;background:var(--accent)}
+.hbar.over span{background:var(--bad)}
+.hnum{font-size:12px;font-variant-numeric:tabular-nums}
+.otok{display:flex;gap:8px;align-items:center;font-size:13px;color:var(--bad)}
+.btn.ghost{background:none;color:var(--muted)}
+.acts{display:flex;flex-wrap:wrap;gap:4px}
+.toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:var(--ink);color:var(--grey);border-radius:10px;padding:10px 14px;display:flex;gap:14px;align-items:center;box-shadow:0 6px 24px rgba(0,0,0,.25);z-index:50;font-size:13px}
+.toast .btn{background:var(--grey);color:var(--ink);border-color:var(--grey)}
+#tab-list table{min-width:1180px}
+#tab-list th,#tab-list td{white-space:nowrap}
+.cyc-bar{grid-column:1/-1;display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:flex-end;border-top:1px dashed var(--line);padding-top:10px}
+.slot.done{background:#fff;color:var(--black)}
+.slot.done .x{color:var(--yellow)}
+.slot .rep{font-weight:500;color:var(--red-dk);margin-left:2px}
+.month button:disabled{opacity:.35;cursor:not-allowed}
+.req{font-size:10px;color:var(--bad);margin-left:4px}
+/* Logo header sits directly on the blue page: no panel */
+header{align-items:center;gap:12px 24px;padding:10px 0 4px}
+.logo{margin:0;font-family:"Noto Sans TC",system-ui,sans-serif;font-weight:900;color:#fff;text-shadow:none;line-height:1;letter-spacing:0;text-transform:uppercase;font-size:clamp(36px,6.2vw,74px);white-space:nowrap}
+
+.hdr-side{display:flex;flex-wrap:wrap;gap:12px 20px;align-items:center;justify-content:flex-end;flex:1 1 300px}
+.hdr-side .plat{color:var(--on-bg);font-size:20px;font-weight:300;letter-spacing:.12em}
+.hdr-side .hello{color:var(--on-bg);font-size:28px;font-weight:300;letter-spacing:.02em;text-align:right;line-height:1.3}
+header .role{background:rgba(255,255,255,.18);border-color:rgba(255,255,255,.35)}
+header .role button{color:#fff}
+header .role button.on{background:var(--yellow);color:var(--black)}
+.sheet{background:var(--surface);border-radius:20px;padding:6px 20px 24px;display:grid;gap:16px;box-shadow:0 20px 40px rgba(0,0,0,.2)}
+.quota{border-color:transparent;box-shadow:0 12px 30px rgba(0,0,0,.2)}
+@media (max-width:640px){.logo{white-space:normal} .hdr-side{justify-items:start}}
+/* menu board */
+.menu-head{display:flex;align-items:baseline;gap:14px;background:var(--black);color:#fff;border-radius:14px;padding:12px 18px;margin-bottom:14px}
+.mh-t{font-family:var(--round);color:var(--yellow);font-size:30px;letter-spacing:.06em;line-height:1}
+.mh-s{font-size:13px;color:#e8e2de}
+.mh-c{margin-left:auto;font-family:var(--round);color:var(--yellow);font-size:15px}
+.ph{position:relative}
+.ph .no{position:absolute;top:8px;left:8px;font-family:var(--round);font-size:34px;line-height:1;background:var(--yellow);color:var(--black);border-radius:12px;padding:4px 10px 6px;font-variant-numeric:tabular-nums}
+.card{border-width:2px}
+.card .name strong{font-family:var(--round);font-weight:800;font-size:17px}
+.btn.order{background:var(--red);border-color:var(--red);color:#fff;font-weight:500}
+.btn.order:disabled{background:var(--grey);border-color:var(--line);color:var(--muted)}
+/* receipt */
+.receipt-dlg{width:min(360px,92vw);padding:0;background:transparent;border:0}
+.receipt{background:#fffdf7;color:var(--black);padding:22px 22px 18px;border-radius:4px;box-shadow:0 18px 40px rgba(0,0,0,.35);
+  -webkit-mask:radial-gradient(circle 7px at 50% 100%,transparent 6px,#000 7px) 0 0/18px 100%;mask:radial-gradient(circle 7px at 50% 100%,transparent 6px,#000 7px) 0 0/18px 100%;padding-bottom:28px}
+.r-shop{font-family:var(--round);font-size:22px;text-align:center;color:var(--red)}
+.r-sub{text-align:center;font-size:12px;color:var(--muted)}
+.r-cut{border-top:2px dashed #cfc5bf;margin:12px 0}
+.r-lbl{text-align:center;font-size:12px;color:var(--muted)}
+.r-no{text-align:center;font-family:var(--round);font-size:40px;letter-spacing:.02em;line-height:1.1}
+.r-row{display:flex;justify-content:space-between;gap:12px;font-size:13px;padding:2px 0}
+.r-row span:first-child{color:var(--muted);flex:none}
+.r-row span:last-child{text-align:right}
+.r-status{text-align:center;font-size:13px;background:var(--yellow);border-radius:8px;padding:6px}
+.r-bar{height:38px;margin:14px 10px 6px;background:repeating-linear-gradient(90deg,#141414 0 2px,transparent 2px 4px,#141414 4px 7px,transparent 7px 9px,#141414 9px 10px,transparent 10px 13px)}
+.r-thanks{text-align:center;font-size:11px;letter-spacing:.14em;color:var(--muted)}
+.r-actions{display:flex;justify-content:center;margin-top:14px}
+.receipt-dlg::backdrop{background:rgba(0,0,0,.5)}
+@media (prefers-reduced-motion:no-preference){.receipt-dlg[open] .receipt{animation:print .45s ease-out}}
+@keyframes print{from{transform:translateY(-24px);opacity:0}to{transform:none;opacity:1}}
+.hidden{display:none!important}
+@media (max-width:640px){.quota{grid-template-columns:1fr}.slots{grid-template-columns:repeat(4,minmax(0,1fr))}}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+@font-face{font-family:"Bebas Neue";src:url("bebas-neue.woff2") format("woff2");font-weight:400;font-display:swap}
+/* ===== v2 layout: yellow page, centered red title ===== */
+.wrap{max-width:1240px}
+header.top{display:block;padding:14px 0 0;background:none}
+.topbar{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:12px}
+.topbar .plat{color:#fff;font-size:22px;font-weight:500;letter-spacing:.3em;text-align:center}
+.topbar .role{justify-self:end;background:rgba(255,255,255,.85);border:0;padding:4px}
+.topbar .role button{color:var(--black);font-weight:500;padding:6px 18px}
+.topbar .role button.on{background:var(--red);color:var(--black)}
+h1.logo{font-family:var(--cond);font-weight:400;color:var(--red);text-align:center;text-transform:uppercase;letter-spacing:.04em;line-height:.95;font-size:clamp(56px,11vw,150px);margin:6px 0 4px;white-space:nowrap;text-shadow:none;display:block}
+.quota{background:rgba(255,255,255,.85);border:0;box-shadow:none;font-weight:500}
+.quota strong,.quota .sub,.quota .big{font-weight:500}
+.quota .big{font-family:var(--cond);font-size:56px;line-height:1;color:var(--black)}
+.month{gap:10px}
+.month strong{font-size:17px;min-width:4.5em;text-align:center}
+.sheet{background:none;box-shadow:none;padding:0;border-radius:0}
+.tabs{border:0;justify-content:center;gap:clamp(12px,5vw,72px);margin:6px 0 4px}
+.tabs button{font-size:clamp(18px,2.4vw,30px);letter-spacing:.2em;color:var(--black);font-weight:400;padding:8px 2px;border-bottom:4px solid transparent}
+.tabs button.en{font-family:var(--cond);letter-spacing:.14em}
+.tabs button.on{color:var(--black);font-weight:500;border-bottom:4px solid var(--red)}
+.filters{background:rgba(255,255,255,.45);border:1px solid rgba(255,255,255,.7);padding:12px;margin-bottom:22px}
+.filters input,.filters select{background:rgba(255,255,255,.55);border-color:rgba(39,37,31,.18);height:44px;padding:0 14px;border-radius:2px;color:var(--black)}
+.filters input::placeholder{color:var(--black);opacity:.75}
+.btn.add{background:var(--red);border-color:var(--red);color:var(--yellow);font-size:17px;font-weight:500;height:44px;padding:0 18px;border-radius:2px}
+.grid{grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:22px}
+.card.v2{border:0;border-radius:2px;padding:16px 16px 14px;color:#fff;gap:10px;box-shadow:0 8px 18px rgba(39,37,31,.18)}
+.card.v2.dark{background:var(--black)}
+.card.v2.red{background:var(--red)}
+.card.v2.off{opacity:.55}
+.c-head{display:flex;align-items:baseline;gap:10px;line-height:1}
+.c-no{font-family:var(--cond);font-size:52px;letter-spacing:.02em}
+.c-name{font-size:22px;letter-spacing:.12em;font-weight:400}
+.card.v2 .ph{aspect-ratio:16/10;border-radius:0;background:linear-gradient(160deg,#4a4740,#2f2d28);display:flex;align-items:center;justify-content:center;position:relative;padding:0}
+.card.v2 .ph b{font-size:64px;font-weight:300;color:rgba(255,255,255,.85);font-family:var(--body)}
+.st-pill{position:absolute;right:8px;bottom:8px;font-size:11px;border:1px solid rgba(255,255,255,.8);border-radius:999px;padding:1px 10px;background:rgba(0,0,0,.35);color:#fff}
+.st-pill.off{background:rgba(215,38,30,.8)}
+.c-meta{text-align:center;font-size:14px;letter-spacing:.04em;white-space:nowrap}
+.c-tags{justify-content:center}
+.card.v2 .chip{background:#dcd8d2;color:var(--black);font-size:12px;padding:3px 14px}
+.card.v2 .chip.koc{background:var(--yellow);color:var(--black);padding:0 8px;font-size:11px}
+.c-info{font-size:12.5px;line-height:1.75;color:rgba(255,255,255,.92)}
+.c-act{display:flex;justify-content:flex-end}
+.btn.c-btn{background:var(--yellow);border-color:var(--yellow);color:var(--black);font-weight:500;padding:4px 16px;border-radius:2px}
+.btn.c-btn:disabled{background:rgba(255,255,255,.3);border-color:transparent;color:#fff}
+.foot{text-align:center;margin:28px 0 0}
+.linkbtn{background:none;border:0;color:var(--black);text-decoration:underline;cursor:pointer;font-size:13px;opacity:.75}
+#tab-book .panel,#tab-rules .panel{box-shadow:0 8px 18px rgba(39,37,31,.12)}
+#tab-list .bar,#tab-export .bar{background:rgba(255,255,255,.45);padding:10px 12px}
+#tab-list .note,#tab-export .note{color:var(--black)}
+#pool-count{color:var(--black)}
+@media (max-width:640px){.topbar{grid-template-columns:1fr;justify-items:center}.topbar>span{display:none}.topbar .role{justify-self:center}h1.logo{white-space:normal;font-size:56px}}
+/* ===== v2.1 tweaks ===== */
+.topbar .role button.on{color:#fff}
+.slots{display:flex;flex-wrap:wrap;justify-content:center;gap:12px;grid-template-columns:none}
+.slot{flex:0 0 auto;width:clamp(78px,8.4vw,108px);height:auto;max-width:none;aspect-ratio:1/1;overflow:hidden;font-family:var(--body);padding:6px}
+.slot .n,.slot .d,.slot.done .st{font-family:var(--body)}
+.slot .n{font-size:24px;font-weight:300}
+.slot .d{font-size:16px;font-weight:500;line-height:1.15}
+.slot .nm,.slot.done .sn{font-size:12px;font-weight:500;line-height:1.2;max-width:88%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.slot.done .st{font-size:21px;font-weight:900;line-height:1.05}
+.slot.done .sd{font-size:12px;font-weight:500;line-height:1.2;letter-spacing:.02em}
+.slot .x,.slot .rep{font-family:var(--body);font-weight:500;font-size:10px;line-height:1.2}
+@media (max-width:640px){.slot{width:72px}}
+.tabs button:not(.en){font-size:clamp(16px,2.16vw,27px);letter-spacing:.14em}
+.quota{border-radius:18px}
+.filters{border-radius:16px}
+.btn,input[type=text],input[type=number],input[type=date],select,textarea{border-radius:10px}
+.filters input,.filters select,.btn.add{border-radius:10px}
+.card.v2{border-radius:16px;overflow:hidden}
+.card.v2 .ph{border-radius:10px;overflow:hidden}
+.btn.c-btn{border-radius:8px}
+.tblwrap,.panel,#tab-list .bar,#tab-export .bar{border-radius:14px}
+/* ===== v2.2 calmer cards ===== */
+.grid{gap:12px}
+.card.v2,.card.v2.red,.card.v2.dark{background:var(--black);display:flex;flex-direction:column;gap:12px;padding:22px 22px 20px;box-shadow:none}
+.c-act{margin-top:auto;padding-top:6px}
+.card.v2 .chip{background:transparent;color:rgba(255,255,255,.85);border:1px solid rgba(255,255,255,.35)}
+.card.v2 .chip.koc{background:var(--yellow);color:var(--black);border-color:var(--yellow)}
+.c-info{color:rgba(255,255,255,.75)}
+.card.v2 .ph{background:linear-gradient(160deg,#3d3a34,#2f2d28)}
+.card.v2.off{opacity:1}
+.card.v2.off>*{opacity:.45}
+/* ===== v2.3 ===== */
+.card.v2 .c-head,.card.v2 .c-meta,.card.v2 .c-tags,.card.v2 .c-info,.card.v2 .c-act{padding-left:8px;padding-right:8px}
+.st-pill{background:var(--yellow);border-color:var(--yellow);color:var(--black);font-weight:500}
+.st-pill.off{background:var(--red);border-color:var(--red);color:#fff}
+.btn.c-btn{background:var(--red);border-color:var(--red);color:#fff}
+.btn.c-btn:disabled{background:rgba(255,255,255,.2);border-color:transparent;color:rgba(255,255,255,.8)}
+/* ===== v2.4 tabs ===== */
+.tabs{align-items:flex-end}
+.tabs button,.tabs button.en,.tabs button:not(.en){font-family:var(--body);font-size:clamp(16px,2.16vw,27px);letter-spacing:.14em;font-weight:300;line-height:1.2;padding:4px 0 0;border-bottom:0;position:relative;color:var(--black)}
+.tabs button.on,.tabs button.on.en{font-weight:900}
+.tabs button.on::after{content:"";position:absolute;left:0;right:.14em;bottom:-6px;height:4px;background:var(--red);border-radius:2px}
+/* ===== v2.5 ===== */
+.form4{grid-template-columns:repeat(4,minmax(0,1fr))}
+.form4 .span2{grid-column:span 2}
+@media (max-width:860px){.form4{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media (max-width:480px){.form4{grid-template-columns:1fr}.form4 .span2{grid-column:auto}}
+.grid{gap:8px}
+.card.v2 .ph{border-radius:0}
+.form label{align-content:start}
+.form input:not([type=checkbox]),.form select{height:40px;padding-top:0;padding-bottom:0}
+/* ===== v2.6 actor dialog ===== */
+.dlg-head{display:flex;justify-content:space-between;align-items:center}
+.dlg-x{border:0;background:none;font-size:26px;line-height:1;cursor:pointer;color:var(--muted);padding:2px 8px;border-radius:8px}
+.dlg-x:hover{background:var(--grey)}
+.photo-row{display:flex;gap:16px;align-items:center}
+.photo-prev{width:120px;aspect-ratio:3/4;background:var(--grey) center/cover no-repeat;border:1px dashed var(--line);display:flex;align-items:center;justify-content:center;flex:none}
+.photo-prev span{font-size:11px;color:var(--muted)}
+.photo-prev.has{border-style:solid}
+.photo-prev.has span{display:none}
+.photo-ctl{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.photo-ctl label.btn{cursor:pointer}
+.vh{position:absolute;width:1px;height:1px;opacity:0;pointer-events:none}
+.photo-ctl .hint{flex-basis:100%}
+.btn.danger{color:var(--red);border-color:var(--red);background:none}
+.card.v2 .ph{background-size:cover;background-position:center 25%}
+.photo-ctl .btn{height:36px;display:inline-flex;align-items:center}
+/* ===== v2.7 tables & detail ===== */
+.tblwrap{overflow-x:scroll;scrollbar-width:auto;scrollbar-color:var(--red) var(--grey)}
+.tblwrap::-webkit-scrollbar{height:12px;-webkit-appearance:none}
+.tblwrap::-webkit-scrollbar-track{background:var(--grey);border-radius:0 0 14px 14px}
+.tblwrap::-webkit-scrollbar-thumb{background:var(--red);border-radius:8px;border:3px solid var(--grey)}
+#tab-list table{min-width:1280px}
+.detail-dlg{width:min(720px,94vw);max-height:88vh;overflow:auto;padding:20px 22px}
+.detail-dlg::backdrop{background:rgba(0,0,0,.45)}
+#d-title .pill{font-size:12px;vertical-align:middle;margin-left:6px}
+.d-sec{border-top:1px solid var(--line);padding:12px 0 4px}
+.d-sec h4{margin:0 0 8px;font-size:13px;color:var(--red);font-weight:500;letter-spacing:.06em}
+.d-sec dl{margin:0;display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:8px 18px}
+.d-sec dt{font-size:11px;color:var(--muted)}
+.d-sec dd{margin:0;font-size:14px;word-break:break-word}
+.d-sec a{color:var(--red)}
+.d-log{margin:0;padding-left:18px;font-size:13px;color:var(--muted)}
+tr.item td:last-child{white-space:nowrap}
+tr.item td:last-child .btn+.btn{margin-left:4px}
+.sheet>*{min-width:0}
+html,body{overflow-x:hidden}
+#e-fixed{margin:6px 0 12px}
+table.xl{min-width:2300px}
+table.xl td.inv .own{font-weight:700;color:var(--red)}
+table.xl td a{color:var(--red)}
+/* 分頁按鈕：滑鼠點擊不出現外框，鍵盤操作時只用淡淡的虛線提示 */
+.tabs button:focus{outline:none}
+.tabs button:focus-visible{outline:2px dashed rgba(39,37,31,.35);outline-offset:6px;border-radius:4px}
+.topbar .role button:focus{outline:none}
+.topbar .role button:focus-visible{outline:2px dashed rgba(39,37,31,.35);outline-offset:2px}
+.oa-cell{all:unset;cursor:pointer;display:block;min-width:110px;min-height:36px;padding:4px 6px;margin:-4px -6px;border-radius:8px;border:1px dashed transparent}
+.oa-cell:hover,.oa-cell:focus-visible{border-color:var(--red);background:var(--red-soft)}
+.oa-empty{color:var(--muted);font-size:12px}
+.oa-edit{display:grid;gap:6px;min-width:150px}
+.oa-edit input{height:34px}
+.oa-btns{display:flex;gap:4px}
+.del-reason{color:var(--red);font-size:13px;margin-top:2px}
+tr.gone-del td{background:#fff6f5}
+td.mno{font-family:var(--body);font-size:13px;padding-left:22px;color:var(--ink)}
+.x-cell{all:unset;cursor:pointer;display:block;min-height:34px;padding:4px 6px;margin:-4px -6px;border-radius:8px;border:1px dashed transparent;text-align:left}
+.x-cell:hover,.x-cell:focus-visible{border-color:var(--red);background:var(--red-soft)}
+table.xl td.inv .x-cell{text-align:center}
+table.xl td.rem{text-align:left;white-space:normal;min-width:240px}
+.x-note{font-size:13px;margin-top:2px}
+.note-edit textarea{min-width:240px}
+/* ===== production: login & account ===== */
+.auth{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px}
+.auth-card{background:#fff;border-radius:20px;padding:28px 26px;width:min(400px,100%);display:grid;gap:14px;box-shadow:0 20px 40px rgba(39,37,31,.18)}
+.auth-card h1{margin:0;font-family:var(--cond);font-weight:400;color:var(--red);font-size:48px;line-height:1;text-align:center;letter-spacing:.04em}
+.auth-card .plat2{text-align:center;color:var(--muted);letter-spacing:.3em;font-size:13px;margin-top:-6px}
+.auth-card label{display:grid;gap:4px;font-size:12px;color:var(--muted)}
+.auth-card input{height:42px}
+.auth-card .btn.primary{height:44px;font-size:16px}
+.userbox{justify-self:end;display:flex;align-items:center;gap:10px;flex-wrap:wrap;justify-content:flex-end}
+.userchip{background:rgba(255,255,255,.85);border-radius:999px;padding:6px 14px;font-size:13px;color:var(--black)}
+.userchip b{font-weight:500}
+.btn.logout{background:rgba(255,255,255,.85);border:0;border-radius:999px;padding:6px 14px;font-size:13px}
+.loading{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(254,202,31,.7);z-index:60;font-size:15px;color:var(--black)}
+.admin-table td,.admin-table th{white-space:nowrap}
+.admin-table select,.admin-table input{height:34px}
+</style>
+</head>
+<body>
+<div id="auth" class="auth hidden">
+  <form class="auth-card" id="login-form" novalidate>
+    <h1>Casting Drive-Thru</h1>
+    <div class="plat2">演員預約平台</div>
+    <label>Email<input type="email" id="l-email" autocomplete="username" required></label>
+    <label>密碼<input type="password" id="l-pass" autocomplete="current-password" required></label>
+    <div id="l-msg"></div>
+    <button class="btn primary" type="submit" id="l-btn">登入</button>
+    <button class="linkbtn" type="button" id="l-forgot">忘記密碼？寄送重設信</button>
+  </form>
+  <form class="auth-card hidden" id="pw-form" novalidate>
+    <h1>Casting Drive-Thru</h1>
+    <div class="plat2">設定新密碼</div>
+    <label>新密碼（至少 8 碼）<input type="password" id="pw-1" autocomplete="new-password"></label>
+    <label>再輸入一次<input type="password" id="pw-2" autocomplete="new-password"></label>
+    <div id="pw-msg"></div>
+    <button class="btn primary" type="submit">儲存密碼並登入</button>
+  </form>
+</div>
+<div id="loading" class="loading hidden">資料載入中…</div>
+<div class="wrap hidden" id="app">
+  <header class="top">
+    <div class="topbar">
+      <span></span>
+      <div class="plat">演員預約平台</div>
+      <div class="userbox">
+        <div class="role hidden" id="viewswitch" role="group" aria-label="管理者切換畫面">
+          <button id="role-casting" data-role="casting">三根木</button>
+          <button id="role-agency" data-role="agency" class="on">大廣</button>
+        </div>
+        <span class="userchip" id="who"></span>
+        <button class="btn logout" id="logout">登出</button>
+      </div>
+    </div>
+    <h1 class="logo">Casting Drive-Thru</h1>
+  </header>
+
+  <section class="quota" aria-label="本期人次">
+    <div class="month">
+      <button id="m-prev" aria-label="上一期">‹</button>
+      <strong id="m-label"></strong>
+      <button id="m-next" aria-label="下一期">›</button>
+    </div>
+    <div class="slots" id="slots"></div>
+    <div style="text-align:right"><div class="big"><span id="q-used">0</span>/7</div><div class="sub" id="q-left"></div></div>
+    <div class="cyc-bar" id="q-act"></div>
+  </section>
+
+  <main class="sheet">
+  <nav class="tabs" role="tablist">
+    <button data-tab="pool" class="on en">MENU</button>
+    <button data-tab="book">預約登記</button>
+    <button data-tab="list">預約總表</button>
+    <button data-tab="export">契約一覽</button>
+    <button data-tab="admin" class="hidden" id="tab-admin-btn">帳號</button>
+  </nav>
+
+  <!-- 演員庫 -->
+  <section id="tab-pool" class="grid-area">
+    <div class="bar filters">
+      <input type="text" id="f-q" placeholder="搜尋姓名、編號、標籤" class="grow" aria-label="搜尋">
+      <select id="f-gender" aria-label="性別"><option value="">性別</option><option value="女">女性</option><option value="男">男性</option></select>
+      <select id="f-age" aria-label="年齡層"><option value="">年齡</option><option value="20-29">20代</option><option value="30-39">30代</option><option value="40-49">40代</option><option value="50-59">50代</option><option value="60-69">60代</option></select>
+      <select id="f-status" aria-label="狀態"><option value="">接案狀態</option><option>可接案</option><option>暫停接案</option></select>
+      <button class="btn add" id="add-actor">＋ 新增演員</button>
+    </div>
+    <div class="grid" id="pool"></div>
+    <p class="note" id="pool-count"></p>
+  </section>
+
+  <!-- 預約登記 -->
+  <section id="tab-book" class="hidden">
+    <form class="panel" id="book-form" novalidate>
+      <h3 class="sec">拍攝資訊</h3>
+      <div class="form form4">
+        <label>演員<select id="b-actor" required></select></label>
+        <label>商品<select id="b-product" required></select></label>
+        <label>素材管理編號<input type="text" id="b-mno" placeholder="例：EX-2611-03" required></label>
+        <label>素材篇名<input type="text" id="b-title" placeholder="例：冬季保濕篇" required></label>
+        <label>拍攝需求<select id="b-role"><option>情境演員</option><option>KOC</option><option>手部 / 局部演員</option><option>主播</option></select></label>
+        <label>拍攝日期<input type="date" id="b-date" required></label>
+        <label>預估拍攝時數<select id="b-hours"><option value="1">1 小時</option><option value="1.5">1.5 小時</option><option value="2" selected>2 小時</option><option value="2.5">2.5 小時</option><option value="3">3 小時</option><option value="3.5">3.5 小時</option><option value="4">4 小時</option><option value="5">5 小時</option><option value="5.5">5.5 小時</option><option value="6">6 小時（整天）</option></select><span class="hint">含換裝、走位</span></label>
+        <label>拍攝地點<input type="text" id="b-place" placeholder="例：內湖攝影棚"></label>
+        <label>負責組別<select id="b-team"><option>花花組</option><option>泡泡組</option><option>啾啾組</option><option>毛毛組</option><option>CRM組</option></select></label>
+      </div>
+      <div id="b-merge" class="hidden" role="status"></div>
+      <label class="otok hidden" id="b-otok-wrap"><input type="checkbox" id="b-otok"> 已和 Casting 公司確認超時，超過 6 小時的部分依演員卡超時費計算</label>
+
+      <h3 class="sec">合約與肖像授權 <span class="tag">由演員卡帶入，預約端不可修改</span></h3>
+      <div class="terms" id="b-terms"></div>
+      <div class="form form4">
+        <label>本素材合約開始日（OA日）<input type="date" id="b-start"><span class="hint">合約依素材 OA 日起算；未定可先留空，之後在預約總表編輯補上</span></label>
+        <label>合約更新提醒日<input type="text" id="b-renew-date" readonly><span class="hint" id="b-renew-hint"></span></label>
+        <label class="span2">腳本<input type="text" id="b-script" placeholder="貼上腳本連結（Google Drive、SharePoint…）或簡述"></label>
+      </div>
+
+      <h3 class="sec">備考</h3>
+      <div class="form">
+        <label class="wide">備考（角色需求、注意事項）<textarea id="b-note" rows="2" placeholder="例：需自備服裝、有 2 句台詞、已簽保密合約"></textarea></label>
+      </div>
+      <div id="b-msg"></div>
+      <div class="bar"><span class="note grow">送出後狀態為「待確認」，由 Casting 公司確認檔期。取消的預約不計入額度。</span><button class="btn primary" type="submit">送出預約</button></div>
+    </form>
+  </section>
+
+  <!-- 預約總表 -->
+  <section id="tab-list" class="hidden">
+    <div class="bar" style="margin-bottom:12px">
+      <select id="l-status" aria-label="篩選狀態"><option value="">全部狀態</option><option>待確認</option><option>已確認</option><option>已拍攝</option><option>已取消</option><option>已刪除</option></select>
+      <select id="l-scope" aria-label="範圍"><option value="cycle">目前期數</option><option value="all">全部期數</option></select>
+      <span class="note grow" id="l-hint"></span>
+      <button class="btn" id="l-copy">複製表格</button>
+      <button class="btn primary hidden" id="l-xlsx">匯出 Excel</button>
+    </div>
+    <div class="tblwrap"><table>
+      <thead><tr><th>人次 / 素材管理編號</th><th>拍攝日期</th><th>演員</th><th>商品</th><th>拍攝需求</th><th>素材篇名</th><th>合約期間（OA日起）</th><th>時數</th><th>登記人</th><th>狀態</th><th>操作</th></tr></thead>
+      <tbody id="rows"></tbody>
+    </table></div>
+  </section>
+
+  <!-- 契約者一覽表 -->
+  <section id="tab-export" class="hidden">
+    <div class="bar" style="margin-bottom:12px">
+      <select id="x-scope" aria-label="匯出範圍"><option value="all">全部合約（不含取消）</option><option value="cycle">只看目前期數</option></select>
+      <span class="note grow" id="x-hint"></span>
+      <button class="btn" id="copy-tsv">複製表格（貼到 Excel）</button>
+      <button class="btn primary" id="dl-xlsx">匯出 Excel</button>
+    </div>
+    <div class="tblwrap"><table class="xl">
+      <thead><tr id="x-head"></tr></thead>
+      <tbody id="xrows"></tbody>
+    </table></div>
+    <p class="note">橘色列：已到合約更新提醒日，需和 Casting 公司確認是否續約。拍攝費以拍攝人次計算：同場多支素材只在第一支列出金額，其餘標「同場已計」。發票日期預設沿用該期的請款日；點「發票日期」或「備考」那一格就能直接修改，按儲存才會生效（紅色粗體＝已個別修改的發票日期）。</p>
+  </section>
+
+  <!-- 規則 -->
+  <section id="tab-rules" class="hidden">
+    <div class="spec">
+      <div class="panel"><h3>額度規則（建議寫進合約）</h3><ul>
+        <li>集點卡：以 7 人次為一期（7 點）：拍滿 7 人次並全數拍攝完成後，Casting 請款一次，之後的預約自動進入下一期</li>
+        <li>1 人次＝同一演員、同一天的一場拍攝；同一演員在同一期出動 2 天，就算 2 人次</li>
+        <li>同一天同一演員拍 2–3 支素材合併算 1 人次；拍兩天算 2 人次</li>
+        <li>同一位演員只能幫一個商品拍 KOC（在該 KOC 合約有效期間內）；已幫 EX 拍 KOC，同場仍可再拍其他商品的情境畫面</li>
+        <li>每人次拍攝當天上限 6 小時（所有素材時數加總）；超過需事先與 Casting 確認並計超時費</li>
+        <li>費用以拍攝人次計算，同場多支素材不另計拍攝費</li>
+        <li>「待確認、已確認、已拍攝」計入額度，「已取消」不計</li>
+        <li>拍攝前 3 個工作天前取消不計次；之後取消照計</li>
+        <li>已請款的期數鎖定，不能再撤銷已拍攝；取消已排入某期的拍攝，空出的人次由下一筆預約補上</li>
+      </ul></div>
+      <div class="panel"><h3>演員庫欄位（Casting 維護）</h3><ul>
+        <li>合約與肖像授權條件（新增演員時必填肖像權期間：3個月 / 6個月 / 1年 / 2年）：更新確認、WEB平台、二次利用、AI 使用、綁競品、拍攝費（每人次）、超時費、保密合約</li>
+        <li>編號、藝名、性別、出生年月（系統換算年齡）</li>
+        <li>身高、衣服 / 鞋子尺寸</li>
+        <li>類型標籤：活潑、會才藝、可講台詞、雙語…</li>
+        <li>接案狀態：可接案 / 暫停接案（暫停接案者不可被預約）</li>
+        <li>演員編號一經建立永不更改、不重複使用；下架的演員不再顯示，但編號與歷史資料都會保留</li>
+        <li>管理員可刪除沒有任何預約紀錄的演員（例如重複建立的資料）；有預約紀錄的演員只能下架</li>
+        <li>可拍攝時段限制、陪同家長、最後更新日</li>
+      </ul></div>
+      <div class="panel"><h3>預約欄位（大廣登記）</h3><ul>
+        <li>演員、商品、素材管理編號、素材篇名、拍攝需求、拍攝日期、時數、地點、組別、登記人</li>
+        <li>最近一期合約開始日（截止日、提醒日自動算）</li>
+        <li>合約條件從演員卡帶入，預約當下鎖定；之後演員卡調整只影響新預約</li>
+        <li>發票日期、備考</li>
+        <li>同一演員同一天的登記會自動併入同一拍攝人次</li>
+        <li>登記錯誤可以「刪除」，必須填寫原因；已拍攝或已請款的素材不能刪除。刪除的預約保留紀錄，可在預約總表的狀態篩選「已刪除」查看</li>
+        <li>狀態變更後 10 秒內可按「復原」；之後 Casting 可退回待確認、撤銷已拍攝，大廣可恢復已取消的素材。已請款的期數鎖定不可撤銷</li>
+        <li>拍攝日之前不能標記已拍攝；每次狀態變更都會留下時間與操作方紀錄</li>
+      </ul></div>
+      <div class="panel"><h3>演出注意</h3><ul>
+                <li>拍攝當天上限 6 小時，含換裝與走位</li>
+        <li>肖像權是否含二次編輯、AI 修圖 / 影片生成，需在合約中逐項寫明，並另簽保密合約</li>
+        <li>平台上僅放必要資料，不放身分證字號、住址、家長電話</li>
+      </ul></div>
+    </div>
+  </section>
+  <!-- 帳號管理（管理者） -->
+  <section id="tab-admin" class="hidden">
+    <div class="panel">
+      <h3 class="sec">帳號與角色</h3>
+      <p class="note">新增帳號：到 Supabase → Authentication → Users → 「Add user」→「Send invitation」寄邀請信（或「Create new user」直接設密碼）。對方第一次登入後，會出現在下表，預設角色是「大廣」，在這裡改成正確的角色即可。</p>
+      <div class="tblwrap"><table class="admin-table"><thead><tr><th>Email</th><th>顯示名稱</th><th>角色</th><th>組別</th><th></th></tr></thead><tbody id="admin-rows"></tbody></table></div>
+    </div>
+  </section>
+
+  <p class="foot"><button data-tab="rules" class="linkbtn">合作規則與欄位說明</button></p>
+  </main>
+</div>
+
+<div id="toast" class="toast hidden" role="status" aria-live="polite"></div>
+<dialog id="detail" class="detail-dlg" aria-labelledby="d-title"><div class="dlg-head"><h3 id="d-title" style="margin:0"></h3><button class="dlg-x" id="d-x" aria-label="關閉視窗">×</button></div><div id="d-body"></div><div class="bar" style="justify-content:flex-end;margin-top:12px"><button class="btn primary" id="d-edit">編輯內容</button></div></dialog>
+<dialog id="deldlg" class="detail-dlg" style="width:min(480px,94vw)" aria-labelledby="del-title"><form method="dialog" novalidate>
+  <div class="dlg-head"><h3 id="del-title" style="margin:0">刪除預約</h3><button class="dlg-x" value="cancel" formnovalidate aria-label="關閉視窗">×</button></div>
+  <p class="meta" id="del-info" style="margin:6px 0 12px"></p>
+  <div class="form"><label class="wide">刪除原因（必填）<textarea id="del-reason" rows="3" placeholder="例：重複登記、客戶取消企劃、登記錯演員"></textarea></label></div>
+  <div id="del-msg"></div>
+  <div class="bar" style="justify-content:flex-end;margin-top:12px"><button class="btn" value="cancel" formnovalidate>取消</button><button type="button" class="btn primary" id="del-ok">確認刪除</button></div>
+</form></dialog>
+<dialog id="invdlg" class="detail-dlg" style="width:min(460px,94vw)" aria-labelledby="i-title"><form method="dialog" novalidate>
+  <div class="dlg-head"><h3 id="i-title" style="margin:0"></h3><button class="dlg-x" value="cancel" formnovalidate aria-label="關閉視窗">×</button></div>
+  <p class="meta" id="i-info" style="margin:6px 0 12px"></p>
+  <div class="form"><label class="wide">發票日期<input type="date" id="i-date"><span class="hint">留空＝沿用該期的請款日</span></label></div>
+  <div id="i-msg"></div>
+  <div class="bar" style="justify-content:flex-end;margin-top:12px"><button type="button" class="btn ghost" id="i-reset">改回期數請款日</button><button class="btn" value="cancel" formnovalidate>取消</button><button type="button" class="btn primary" id="i-save">儲存</button></div>
+</form></dialog>
+<dialog id="editbk" class="detail-dlg" aria-labelledby="e-title"><form id="e-form" method="dialog" novalidate>
+  <div class="dlg-head"><h3 id="e-title" style="margin:0">編輯預約</h3><button class="dlg-x" value="cancel" formnovalidate aria-label="關閉視窗">×</button></div>
+  <p class="meta" id="e-fixed"></p>
+  <div class="form form4">
+    <label>素材管理編號<input type="text" id="e-mno"></label>
+    <label class="span2">素材篇名<input type="text" id="e-title-in"></label>
+    <label>拍攝需求<select id="e-role"><option>情境演員</option><option>KOC</option><option>手部 / 局部演員</option><option>主播</option></select></label>
+    <label>拍攝日期<input type="date" id="e-date"><span class="hint" id="e-date-hint"></span></label>
+    <label>預估拍攝時數<select id="e-hours"></select></label>
+    <label>拍攝地點<input type="text" id="e-place"></label>
+    <label>負責組別<select id="e-team"><option>花花組</option><option>泡泡組</option><option>啾啾組</option><option>毛毛組</option><option>CRM組</option></select></label>
+    <label>本素材合約開始日（OA日）<input type="date" id="e-start"></label>
+    <label class="span2">腳本<input type="text" id="e-script" placeholder="腳本連結或簡述"></label>
+    <label class="wide" style="grid-column:1/-1">備考<textarea id="e-note" rows="2"></textarea></label>
+  </div>
+  <label class="otok hidden" id="e-otok-wrap"><input type="checkbox" id="e-otok"> 已和 Casting 公司確認超時</label>
+  <div id="e-msg"></div>
+  <div class="bar" style="justify-content:flex-end;margin-top:10px"><button class="btn" value="cancel" formnovalidate>取消</button><button class="btn primary" id="e-save" type="button">儲存修改</button></div>
+</form></dialog>
+<dialog id="receipt" class="receipt-dlg" aria-labelledby="r-title"><div class="receipt" id="r-body"></div><form method="dialog" class="r-actions"><button class="btn primary" value="ok">收下</button></form></dialog>
+<dialog id="actor-dlg">
+  <form id="actor-form" method="dialog" class="form" style="gap:10px 14px">
+    <div class="wide dlg-head"><h3 id="dlg-title" style="margin:0">新增演員</h3><button class="dlg-x" value="cancel" formnovalidate aria-label="關閉視窗">×</button></div>
+    <div class="wide photo-row">
+      <div class="photo-prev" id="a-photo-prev"><span>尚未上傳照片</span></div>
+      <div class="photo-ctl">
+        <label class="btn" for="a-photo">上傳照片</label>
+        <input type="file" id="a-photo" accept="image/*" class="vh">
+        <button type="button" class="btn ghost" id="a-photo-rm">移除照片</button>
+        <span class="hint">JPG / PNG，建議直式半身照；系統會自動縮小</span>
+      </div>
+    </div>
+    <label>編號<input type="text" id="a-id" readonly placeholder="儲存後自動產生"></label>
+    <label>藝名<input type="text" id="a-name" required></label>
+    <label>性別<select id="a-gender"><option>女</option><option>男</option></select></label>
+    <label>出生年月<input type="text" id="a-birth" placeholder="1990-05"></label>
+    <label>身高 (cm)<input type="number" id="a-height"></label>
+    <label>衣服尺寸<input type="text" id="a-size" placeholder="M"></label>
+    <label>接案狀態<select id="a-status"><option>可接案</option><option>暫停接案</option></select></label>
+    <label>可拍時段<input type="text" id="a-time" placeholder="平日白天、週末"></label>
+    <label class="wide">類型標籤（以逗號分隔）<input type="text" id="a-tags" placeholder="活潑, 可講台詞"></label>
+    <label class="wide">備註<input type="text" id="a-note"></label>
+    <h3 class="wide sec">合約與肖像授權條件 <span class="tag">廣代預約時直接帶入</span></h3>
+    <label>肖像權期間（合約長度）<span class="req">必填</span><select id="t-length"><option value="">請選擇</option><option value="3">3個月</option><option value="6">6個月</option><option value="12">1年</option><option value="24">2年</option></select><span class="hint">廣代預約時，合約截止日依此自動計算</span></label>
+    <label>合約更新確認<select id="t-renew"><option value="30">30天前</option><option value="60">60天前</option><option value="14">14天前</option></select></label>
+    <label>拍攝費（NT$ / 每人次）<input type="number" id="t-fee" min="0" step="100"></label>
+    <label>超時費（NT$ / 小時）<input type="number" id="t-ot" min="0" step="100"></label>
+    <fieldset class="wide checks"><legend>WEB平台授權（可複選）</legend>
+      <label><input type="checkbox" name="tweb" value="IG"> IG</label>
+      <label><input type="checkbox" name="tweb" value="FB"> FB</label>
+      <label><input type="checkbox" name="tweb" value="TikTok"> TikTok</label>
+      <label><input type="checkbox" name="tweb" value="YouTube"> YouTube</label>
+      <label><input type="checkbox" name="tweb" value="官網"> 官網</label>
+      <label><input type="checkbox" name="tweb" value="電商"> 電商</label>
+    </fieldset>
+    <label>二次利用<select id="t-second"><option>○</option><option>X</option></select></label>
+    <label>AI 修圖 / 影片生成<select id="t-ai"><option>X</option><option>○</option></select></label>
+    <label>綁競品（成分）<select id="t-ci"><option>X</option><option>○</option></select></label>
+    <label>綁競品（功効）<select id="t-ce"><option>X</option><option>○</option></select></label>
+    <label>保密合約<select id="t-nda"><option>已簽</option><option>未簽</option></select></label>
+    <div class="bar wide"><button class="btn" value="del" id="a-del" formnovalidate>下架演員</button><button type="button" class="btn danger" id="a-purge">刪除（管理員）</button><span class="grow"></span><button class="btn" value="cancel" formnovalidate>取消</button><button class="btn primary" value="save" id="a-save">儲存</button></div>
+    <div class="wide" id="a-err"></div>
+  </form>
+</dialog>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js"></script>
+<script src="config.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
