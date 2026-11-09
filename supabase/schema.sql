@@ -42,7 +42,8 @@ create table public.actors (
   birth_ym        text,                       -- 出生年月，例如 2017-05
   height          int,
   size            text,
-  status          text not null default '可接案' check (status in ('可接案','暫停')),
+  status          text not null default '可接案' check (status in ('可接案','暫停接案')),
+  archived        boolean not null default false,  -- 下架：不顯示、不能預約，但編號與資料永久保留
   avail_time      text,
   tags            text[] not null default '{}',
   note            text,
@@ -87,11 +88,13 @@ create table public.bookings (
   team            text,
   role_type       text not null,                -- 情境演員 / KOC / ...
   title           text not null,                -- 素材篇名
+  material_no     text,                         -- 素材管理編號
+  script          text,                         -- 腳本連結或說明
   place           text,
   booked_by       uuid references public.profiles default auth.uid(),
   booked_by_name  text,
   first_start     date,
-  start_date      date not null,                -- 最近一期合約開始日
+  start_date      date not null,                -- 本素材合約開始日（OA日）
   -- 合約條件快照
   portrait_months int not null,
   renew_days      int not null,
@@ -156,8 +159,8 @@ $$;
 -- ---------- 預約（大廣） ----------
 create function public.create_booking(
   p_actor text, p_date date, p_hours numeric, p_product text, p_team text,
-  p_role text, p_title text, p_place text, p_first date, p_start date,
-  p_note text, p_overtime_ok boolean default false
+  p_role text, p_material_no text, p_title text, p_place text, p_start date,
+  p_script text, p_note text, p_overtime_ok boolean default false
 ) returns public.bookings
 language plpgsql security definer set search_path = public as $$
 declare
@@ -169,7 +172,7 @@ begin
 
   select * into a from actors where id = p_actor;
   if not found then raise exception '找不到這位演員'; end if;
-  if a.status <> '可接案' then raise exception '% 目前暫停接案', a.name; end if;
+  if a.status <> '可接案' or a.archived then raise exception '% 目前暫停接案', a.name; end if;
 
   v_koc := koc_conflict(p_actor, p_product, p_date);
   if p_role = 'KOC' and v_koc is not null then
@@ -203,12 +206,13 @@ begin
   select 'BK-' || v_yymm || '-' || lpad((count(*) + 1)::text, 2, '0') into v_id
     from bookings where id like 'BK-' || v_yymm || '-%';
 
-  insert into bookings (id, shoot_id, cycle_no, actor_id, shoot_date, hours, product, team, role_type, title,
-                        place, booked_by_name, first_start, start_date, portrait_months, renew_days, web,
+  insert into bookings (id, shoot_id, cycle_no, actor_id, shoot_date, hours, product, team, role_type, material_no, title,
+                        place, booked_by_name, first_start, start_date, script, portrait_months, renew_days, web,
                         second_use, ai_use, comp_ingredient, comp_effect, shoot_fee, overtime_fee, nda, note)
-  values (v_id, v_shoot, v_cycle, p_actor, p_date, p_hours, p_product, p_team, p_role, p_title,
+  values (v_id, v_shoot, v_cycle, p_actor, p_date, p_hours, p_product, p_team, p_role, p_material_no, p_title,
           p_place, (select coalesce(display_name, email) from profiles where id = auth.uid()),
-          coalesce(p_first, p_start), p_start, a.portrait_months, a.renew_days, a.web,
+          coalesce((select min(start_date) from bookings where actor_id = p_actor and product = p_product and status <> '已取消'), p_start),
+          p_start, p_script, a.portrait_months, a.renew_days, a.web,
           a.second_use, a.ai_use, a.comp_ingredient, a.comp_effect,
           coalesce(ex.shoot_fee, a.shoot_fee), coalesce(ex.overtime_fee, a.overtime_fee), a.nda, p_note)
   returning * into r;
@@ -311,7 +315,7 @@ create policy "管理者可改角色"     on public.profiles   for update to aut
 create policy "登入者可看演員庫"   on public.actors     for select to authenticated using (true);
 create policy "Casting 新增演員"   on public.actors     for insert to authenticated with check (my_role() in ('casting','admin'));
 create policy "Casting 編輯演員"   on public.actors     for update to authenticated using (my_role() in ('casting','admin')) with check (my_role() in ('casting','admin'));
-create policy "Casting 刪除演員"   on public.actors     for delete to authenticated using (my_role() in ('casting','admin'));
+-- 演員不能刪除，只能下架（archived），編號與歷史資料永久保留
 create policy "登入者可看期數"     on public.cycles     for select to authenticated using (true);
 create policy "登入者可看預約"     on public.bookings   for select to authenticated using (true);
 create policy "登入者可看紀錄"     on public.status_log for select to authenticated using (true);
@@ -321,12 +325,12 @@ create policy "登入者可看紀錄"     on public.status_log for select to aut
 grant usage on schema public to authenticated;
 grant select on public.profiles, public.actors, public.cycles, public.bookings, public.status_log to authenticated;
 grant update (role, team, display_name) on public.profiles to authenticated;
-grant insert, update, delete on public.actors to authenticated;
+grant insert, update on public.actors to authenticated;
 grant usage on sequence public.actor_seq to authenticated;
 revoke all on all tables in schema public from anon;
 revoke execute on all functions in schema public from anon, public;
 grant execute on function public.my_role(), public.today_tw(), public.open_cycle(),
-  public.create_booking(text,date,numeric,text,text,text,text,text,date,date,text,boolean),
+  public.create_booking(text,date,numeric,text,text,text,text,text,text,date,text,text,boolean),
   public.set_booking_cancelled(text,boolean), public.set_shoot_status(text,text),
   public.invoice_cycle(int,date), public.uninvoice_cycle(int) to authenticated;
 
