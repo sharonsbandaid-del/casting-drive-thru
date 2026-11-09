@@ -24,6 +24,10 @@ begin
 end $$;
 create trigger on_auth_user_created after insert on auth.users
   for each row execute function public.handle_new_user();
+-- 執行這份語法之前就已經建立的帳號，也補上 profile
+insert into public.profiles (id, email, display_name)
+select id, email, split_part(email, '@', 1) from auth.users
+on conflict (id) do nothing;
 
 create function public.my_role() returns text
 language sql stable security definer set search_path = public as $$
@@ -488,7 +492,12 @@ grant execute on function public.my_role(), public.today_tw(), public.open_cycle
   public.invoice_cycle(int,date), public.uninvoice_cycle(int) to authenticated;
 
 -- ---------- 演員照片（私有，只有登入者看得到） ----------
-insert into storage.buckets (id, name, public) values ('actor-photos', 'actor-photos', false);
+insert into storage.buckets (id, name, public) values ('actor-photos', 'actor-photos', false)
+on conflict (id) do nothing;
+drop policy if exists "登入者可看演員照片" on storage.objects;
+drop policy if exists "Casting 上傳照片"   on storage.objects;
+drop policy if exists "Casting 更新照片"   on storage.objects;
+drop policy if exists "Casting 刪除照片"   on storage.objects;
 create policy "登入者可看演員照片" on storage.objects for select to authenticated using (bucket_id = 'actor-photos');
 create policy "Casting 上傳照片"   on storage.objects for insert to authenticated with check (bucket_id = 'actor-photos' and public.my_role() in ('casting','admin'));
 create policy "Casting 更新照片"   on storage.objects for update to authenticated using (bucket_id = 'actor-photos' and public.my_role() in ('casting','admin'));
