@@ -94,7 +94,7 @@ create table public.bookings (
   booked_by       uuid references public.profiles default auth.uid(),
   booked_by_name  text,
   first_start     date,
-  start_date      date not null,                -- 本素材合約開始日（OA日）
+  start_date      date,                         -- 本素材合約開始日（OA日），未定可先留空
   -- 合約條件快照
   portrait_months int not null,
   renew_days      int not null,
@@ -146,7 +146,7 @@ returns text language sql stable security definer set search_path = public as $$
   select product from bookings
    where actor_id = p_actor and role_type = 'KOC' and status <> '已取消'
      and product <> p_product and id is distinct from p_exclude
-     and (start_date + make_interval(months => portrait_months) - interval '1 day')::date >= p_date
+     and (coalesce(start_date, shoot_date) + make_interval(months => portrait_months) - interval '1 day')::date >= p_date
    limit 1
 $$;
 
@@ -211,12 +211,45 @@ begin
                         second_use, ai_use, comp_ingredient, comp_effect, shoot_fee, overtime_fee, nda, note)
   values (v_id, v_shoot, v_cycle, p_actor, p_date, p_hours, p_product, p_team, p_role, p_material_no, p_title,
           p_place, (select coalesce(display_name, email) from profiles where id = auth.uid()),
-          coalesce((select min(start_date) from bookings where actor_id = p_actor and product = p_product and status <> '已取消'), p_start),
+          coalesce((select min(start_date) from bookings where actor_id = p_actor and product = p_product and status <> '已取消' and start_date is not null), p_start),
           p_start, p_script, a.portrait_months, a.renew_days, a.web,
           a.second_use, a.ai_use, a.comp_ingredient, a.comp_effect,
           coalesce(ex.shoot_fee, a.shoot_fee), coalesce(ex.overtime_fee, a.overtime_fee), a.nda, p_note)
   returning * into r;
   perform log_status(r.id, null, '待確認');
+  return r;
+end $$;
+
+-- ---------- 修改預約內容（大廣）：演員、商品、拍攝日不能改，要換請取消後重新預約 ----------
+create function public.update_booking(
+  p_id text, p_material_no text, p_title text, p_role text, p_hours numeric, p_place text,
+  p_team text, p_start date, p_script text, p_note text, p_overtime_ok boolean default false
+) returns public.bookings language plpgsql security definer set search_path = public as $$
+declare b bookings; v_koc text; v_others numeric; v_locked boolean; r bookings;
+begin
+  if my_role() not in ('agency','admin') then raise exception '只有大廣帳號可以修改預約'; end if;
+  perform pg_advisory_xact_lock(hashtext('casting-booking'));
+  select * into b from bookings where id = p_id for update;
+  if not found then raise exception '找不到這筆預約'; end if;
+  if b.status = '已取消' then raise exception '已取消的素材不能修改，請先恢復'; end if;
+  if coalesce(trim(p_title),'') = '' then raise exception '請填寫素材篇名'; end if;
+  v_locked := b.status = '已拍攝' or is_invoiced(b.cycle_no);
+  if v_locked and (p_role is distinct from b.role_type or p_hours is distinct from b.hours) then
+    raise exception '已拍攝或已請款的素材，時數與拍攝需求不能修改';
+  end if;
+  v_koc := koc_conflict(b.actor_id, b.product, b.shoot_date, b.id);
+  if p_role = 'KOC' and v_koc is not null then raise exception '這位演員已綁 % 的 KOC，不能改成 KOC', v_koc; end if;
+  select coalesce(sum(hours),0) into v_others from bookings where shoot_id = b.shoot_id and id <> b.id and status <> '已取消';
+  if v_others + p_hours > 6 and not p_overtime_ok then
+    raise exception '這場加總 % 小時，超過當天上限 6 小時', v_others + p_hours;
+  end if;
+  update bookings set material_no = p_material_no, title = p_title, role_type = p_role, hours = p_hours,
+         place = p_place, team = p_team, start_date = p_start, script = p_script, note = p_note
+   where id = p_id returning * into r;
+  if p_hours is distinct from b.hours then
+    update bookings set status = '待確認' where shoot_id = b.shoot_id and status = '已確認';   -- 時數變了，請 Casting 重新確認
+  end if;
+  perform log_status(p_id, '內容', '修改');
   return r;
 end $$;
 
@@ -332,7 +365,8 @@ revoke all on all tables in schema public from anon;
 revoke execute on all functions in schema public from anon, public;
 grant execute on function public.my_role(), public.today_tw(), public.open_cycle(),
   public.create_booking(text,date,numeric,text,text,text,text,text,text,date,text,text,boolean),
-  public.set_booking_cancelled(text,boolean), public.set_shoot_status(text,text),
+  public.set_booking_cancelled(text,boolean),
+  public.update_booking(text,text,text,text,numeric,text,text,date,text,text,boolean), public.set_shoot_status(text,text),
   public.invoice_cycle(int,date), public.uninvoice_cycle(int) to authenticated;
 
 -- ---------- 演員照片（私有，只有登入者看得到） ----------
