@@ -110,6 +110,16 @@ create index on public.bookings (actor_id, shoot_date);
 create index on public.bookings (cycle_no);
 create index on public.bookings (shoot_id);
 
+-- 刪除的預約：從 bookings 移到這裡保存（含刪除原因與當時的狀態紀錄），不影響人次與契約一覽
+create table public.deleted_bookings (
+  id              text primary key,
+  data            jsonb not null,
+  reason          text not null,
+  deleted_by      uuid default auth.uid(),
+  deleted_by_name text,
+  deleted_at      timestamptz not null default now()
+);
+
 create table public.status_log (
   id          bigserial primary key,
   booking_id  text not null references public.bookings,
@@ -204,8 +214,9 @@ begin
     select 'SH-' || v_yymm || '-' || lpad((coalesce(max(substring(shoot_id from '[0-9]+$')::int), 0) + 1)::text, 2, '0') into v_shoot
       from bookings where shoot_id like 'SH-' || v_yymm || '-%';
   end if;
-  select 'BK-' || v_yymm || '-' || lpad((count(*) + 1)::text, 2, '0') into v_id
-    from bookings where id like 'BK-' || v_yymm || '-%';
+  select 'BK-' || v_yymm || '-' || lpad((coalesce(max(substring(x from '[0-9]+$')::int), 0) + 1)::text, 2, '0') into v_id
+    from (select id as x from bookings union all select id from deleted_bookings) ids
+   where x like 'BK-' || v_yymm || '-%';             -- 最大號＋1：刪除過的編號也不會重複使用
 
   insert into bookings (id, shoot_id, cycle_no, actor_id, shoot_date, hours, product, team, role_type, material_no, title,
                         place, booked_by_name, first_start, start_date, script, portrait_months, renew_days, web,
@@ -328,6 +339,25 @@ begin
   perform log_status(p_id, '發票日期 ' || coalesce(old::text, '（期數請款日）'), coalesce(p_date::text, '改回期數請款日'));
 end $$;
 
+-- ---------- 刪除預約（大廣，必填原因；已拍攝或已請款不能刪） ----------
+create function public.delete_booking(p_id text, p_reason text)
+returns void language plpgsql security definer set search_path = public as $$
+declare b bookings; v_log jsonb;
+begin
+  if my_role() not in ('agency','admin') then raise exception '只有大廣帳號可以刪除預約'; end if;
+  if coalesce(length(trim(p_reason)),0) < 2 then raise exception '請填寫刪除原因'; end if;
+  perform pg_advisory_xact_lock(hashtext('casting-booking'));
+  select * into b from bookings where id = p_id for update;
+  if not found then raise exception '找不到這筆預約'; end if;
+  if b.status = '已拍攝' or is_invoiced(b.cycle_no) then raise exception '已拍攝或已請款的素材不能刪除'; end if;
+  select coalesce(jsonb_agg(to_jsonb(l) order by l.at), '[]'::jsonb) into v_log from status_log l where l.booking_id = p_id;
+  insert into deleted_bookings (id, data, reason, deleted_by_name)
+  values (p_id, to_jsonb(b) || jsonb_build_object('status_log', v_log), trim(p_reason),
+          (select coalesce(display_name, email) from profiles where id = auth.uid()));
+  delete from status_log where booking_id = p_id;
+  delete from bookings where id = p_id;
+end $$;
+
 -- ---------- 取消／恢復素材（大廣） ----------
 create function public.set_booking_cancelled(p_id text, p_cancel boolean)
 returns public.bookings language plpgsql security definer set search_path = public as $$
@@ -417,6 +447,7 @@ alter table public.actors     enable row level security;
 alter table public.cycles     enable row level security;
 alter table public.bookings   enable row level security;
 alter table public.status_log enable row level security;
+alter table public.deleted_bookings enable row level security;
 
 create policy "登入者可看所有人名" on public.profiles   for select to authenticated using (true);
 create policy "管理者可改角色"     on public.profiles   for update to authenticated using (my_role() = 'admin') with check (my_role() = 'admin');
@@ -428,11 +459,12 @@ create policy "管理者刪除演員" on public.actors for delete to authenticat
 create policy "登入者可看期數"     on public.cycles     for select to authenticated using (true);
 create policy "登入者可看預約"     on public.bookings   for select to authenticated using (true);
 create policy "登入者可看紀錄"     on public.status_log for select to authenticated using (true);
+create policy "登入者可看已刪除"   on public.deleted_bookings for select to authenticated using (true);
 -- bookings / cycles / status_log 沒有寫入權限：只能透過上面的函式改，規則才不會被繞過
 
 -- 未自動開放的資料表，手動授權給「已登入」的人；未登入（anon）什麼都看不到
 grant usage on schema public to authenticated;
-grant select on public.profiles, public.actors, public.cycles, public.bookings, public.status_log to authenticated;
+grant select on public.profiles, public.actors, public.cycles, public.bookings, public.status_log, public.deleted_bookings to authenticated;
 grant update (role, team, display_name) on public.profiles to authenticated;
 grant insert, update, delete on public.actors to authenticated;
 grant usage on sequence public.actor_seq to authenticated;
@@ -442,7 +474,7 @@ grant execute on function public.my_role(), public.today_tw(), public.open_cycle
   public.create_booking(text,date,numeric,text,text,text,text,text,text,date,text,text,boolean),
   public.set_booking_cancelled(text,boolean),
   public.update_booking(text,text,text,text,numeric,text,text,date,text,text,date,boolean,boolean),
-  public.set_invoice_date(text,date), public.set_oa_date(text,date), public.set_shoot_status(text,text),
+  public.set_invoice_date(text,date), public.set_oa_date(text,date), public.delete_booking(text,text), public.set_shoot_status(text,text),
   public.invoice_cycle(int,date), public.uninvoice_cycle(int) to authenticated;
 
 -- ---------- 演員照片（私有，只有登入者看得到） ----------
