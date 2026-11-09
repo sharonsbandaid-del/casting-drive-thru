@@ -225,7 +225,7 @@ end $$;
 create function public.update_booking(
   p_id text, p_material_no text, p_title text, p_role text, p_hours numeric, p_place text,
   p_team text, p_start date, p_script text, p_note text,
-  p_date date default null, p_move_all boolean default true, p_overtime_ok boolean default false
+  p_date date default null, p_move_all boolean default false, p_overtime_ok boolean default false
 ) returns public.bookings language plpgsql security definer set search_path = public as $$
 declare
   b bookings; v_koc text; v_locked boolean; r bookings; v_date date; v_changed boolean;
