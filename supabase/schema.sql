@@ -464,7 +464,7 @@ alter table public.bookings   enable row level security;
 alter table public.status_log enable row level security;
 alter table public.deleted_bookings enable row level security;
 
-create policy "登入者可看所有人名" on public.profiles   for select to authenticated using (true);
+create policy "只看自己（管理者看全部）" on public.profiles for select to authenticated using (id = auth.uid() or my_role() = 'admin');
 create policy "管理者可改角色"     on public.profiles   for update to authenticated using (my_role() = 'admin') with check (my_role() = 'admin');
 create policy "登入者可看演員庫"   on public.actors     for select to authenticated using (true);
 create policy "Casting 新增演員"   on public.actors     for insert to authenticated with check (my_role() in ('casting','admin'));
