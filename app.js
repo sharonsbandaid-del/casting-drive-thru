@@ -103,8 +103,8 @@ function renderPool(){
     const hist = actorHistory(a.id);
     const koc = kocOf(a.id);
     return '<article class="card v2 '+(list.indexOf(a)%2?'red':'dark')+(a.status==="暫停接案"?" off":"")+'">'+
-      '<div class="c-head"><span class="c-no">'+esc(a.id.replace(/\D/g,"").padStart(3,"0").slice(-3))+'</span><span class="c-name">'+esc(a.name)+'</span></div>'+
-      '<div class="ph"'+(a.photo?' style="background-image:url(&quot;'+a.photo+'&quot;)"':'')+'>'+(a.photo?'':'<b>'+esc(a.name.slice(-1))+'</b>')+'<span class="st-pill'+(a.status==="暫停接案"?" off":"")+'">'+esc(a.status)+'</span></div>'+
+      '<div class="c-head" data-view-actor="'+a.id+'" role="button" tabindex="0" title="查看演員細節"><span class="c-no">'+esc(a.id.replace(/\D/g,"").padStart(3,"0").slice(-3))+'</span><span class="c-name">'+esc(a.name)+'</span></div>'+
+      '<div class="ph" data-view-actor="'+a.id+'" role="button" tabindex="0" aria-label="查看 '+esc(a.name)+' 的細節"'+(a.photo?' style="background-image:url(&quot;'+a.photo+'&quot;)"':'')+'>'+(a.photo?'':'<b>'+esc(a.name.slice(-1))+'</b>')+'<span class="st-pill'+(a.status==="暫停接案"?" off":"")+'">'+esc(a.status)+'</span></div>'+
       '<div class="c-meta">'+esc(a.gender)+'・'+age(a.birth)+' 歲・'+esc(a.height)+' cm・衣 '+esc(a.size)+'</div>'+
       '<div class="chips c-tags">'+a.tags.map(t=>'<span class="chip">'+esc(t)+'</span>').join("")+'</div>'+
       '<div class="c-info">可拍攝日：'+esc(a.time||"—")+'<br>拍攝歷：'+esc(hist.line||"—")+(koc?'<br><span class="chip koc">KOC</span> 已綁 '+esc(koc.product)+'（至 '+esc(slash(koc.end))+'）':'')+(a.note?'<br>備註：'+esc(a.note):'')+'</div>'+
@@ -279,10 +279,44 @@ $("xrows").addEventListener("click",e=>{
   if(e.target.closest("[data-x-cancel]")){ renderExport(); return; }
 });
 
+function bookActor(id){ setTab("book"); $("b-actor").value=id; if(!$("b-date").value){ const d=new Date(today); d.setDate(d.getDate()+7); $("b-date").value=fmt(d); } syncForm("date"); $("b-title").focus(); }
+/* MENU：演員細節 */
+function openActorView(id){
+  const a=actorById(id); if(!a) return; const t=a.terms||{};
+  const koc=kocOf(a.id);
+  const list=bookings.filter(b=>b.actor===a.id&&b.status!=="已刪除").sort((x,y)=>y.date.localeCompare(x.date));
+  const shoots=new Set(list.filter(counts).map(b=>b.shoot)).size;
+  const sec=(ti,rows)=>'<section class="d-sec"><h4>'+esc(ti)+'</h4><dl>'+rows.map(r=>'<div><dt>'+esc(r[0])+'</dt><dd>'+esc((r[1]===""||r[1]==null)?"—":String(r[1]))+'</dd></div>').join("")+'</dl></section>';
+  const money=v=>(v===""||v==null)?"—":Number(v).toLocaleString()+" 元";
+  $("av-title").innerHTML='<span class="av-no">'+esc(a.id.replace(/\D/g,"").padStart(3,"0").slice(-3))+'</span> '+esc(a.name)+' <span class="pill '+(a.status==="暫停接案"?"s-bad":"s-ok")+'">'+esc(a.status)+'</span>';
+  $("av-body").innerHTML=
+    '<div class="av-top"><div class="av-ph"'+(a.photo?' style="background-image:url(&quot;'+a.photo+'&quot;)"':'')+'>'+(a.photo?'':'<b>'+esc(a.name.slice(-1))+'</b>')+'</div>'+
+    '<div class="av-info">'+sec("基本資料",[["演員編號",a.id],["性別",a.gender],["年齡",a.birth?age(a.birth)+" 歲（"+a.birth.replace("-","/")+"）":""],["身高",a.height!==""?a.height+" cm":""],["衣服尺寸",a.size],["可拍攝日",a.time],["最後更新",a.updated?slash(a.updated):""]])+
+    (a.tags.length?'<div class="chips" style="margin-top:8px">'+a.tags.map(x=>'<span class="chip">'+esc(x)+'</span>').join("")+'</div>':'')+
+    (a.note?'<p class="meta" style="margin-top:8px">備註：'+esc(a.note)+'</p>':'')+'</div></div>'+
+    sec("合約與肖像授權",[["肖像權期間",t.length?lenLabel(t.length):""],["合約更新提醒",t.renew?"到期前 "+t.renew+" 天":""],["WEB平台",(t.web||[]).join("、")],["二次利用",t.second],["AI 修圖 / 影片生成",t.ai],["綁競品（成分 / 功效）",(t.ci||"—")+" / "+(t.ce||"—")],["拍攝費（每人次）",money(t.fee)],["超時費",money(t.ot)],["保密合約",t.nda]])+
+    '<section class="d-sec"><h4>拍攝紀錄</h4>'+
+      '<p class="meta" style="margin:0 0 6px">共 '+shoots+' 人次・'+list.filter(counts).length+' 支素材'+(koc?'　｜　<span class="chip koc">KOC</span> 已綁 '+esc(koc.product)+'（至 '+esc(slash(koc.end))+'）':'')+'</p>'+
+      (list.length?'<div class="tbl-wrap"><table class="av-tbl"><thead><tr><th>拍攝日期</th><th>商品</th><th>素材管理編號</th><th>素材篇名</th><th>拍攝需求</th><th>狀態</th></tr></thead><tbody>'+
+        list.map(b=>'<tr><td>'+esc(slash(b.date))+'</td><td>'+esc(b.product)+'</td><td>'+esc(b.mno||"—")+'</td><td>'+esc(b.title||"—")+'</td><td>'+esc(b.role)+'</td><td><span class="pill '+(statusCls[b.status]||"")+'">'+esc(b.status)+'</span></td></tr>').join("")+
+      '</tbody></table></div>':'<p class="meta">還沒有拍攝紀錄</p>')+
+    '</section>';
+  const isCasting = role==="casting";
+  $("av-book").classList.toggle("hidden", isCasting); $("av-book").disabled = a.status==="暫停接案" || a.archived;
+  $("av-book").textContent = a.status==="暫停接案" ? "暫停供應" : "點這位";
+  $("av-edit").classList.toggle("hidden", !isCasting);
+  $("actor-view").dataset.id=a.id; $("actor-view").showModal();
+}
+$("av-x").onclick=()=>$("actor-view").close();
+$("actor-view").addEventListener("click",e=>{ if(e.target===$("actor-view")) $("actor-view").close(); });
+$("av-book").onclick=()=>{ const id=$("actor-view").dataset.id; $("actor-view").close(); bookActor(id); };
+$("av-edit").onclick=()=>{ const id=$("actor-view").dataset.id; $("actor-view").close(); openActor(id); };
+$("pool").addEventListener("keydown",e=>{ const v=e.target.closest("[data-view-actor]"); if(v&&(e.key==="Enter"||e.key===" ")){ e.preventDefault(); openActorView(v.dataset.viewActor); } });
 $("pool").addEventListener("click",e=>{
-  const ed=e.target.closest("[data-edit]"), bk=e.target.closest("[data-book]");
+  const ed=e.target.closest("[data-edit]"), bk=e.target.closest("[data-book]"), vw=e.target.closest("[data-view-actor]");
+  if(vw){ openActorView(vw.dataset.viewActor); return; }
   if(ed) openActor(ed.dataset.edit);
-  if(bk){ setTab("book"); $("b-actor").value=bk.dataset.book; if(!$("b-date").value){ const d=new Date(today); d.setDate(d.getDate()+7); $("b-date").value=fmt(d); } syncForm("date"); $("b-title").focus(); }
+  if(bk){ bookActor(bk.dataset.book); return; }
 });
 $("rows").addEventListener("click",e=>{
   const oa=e.target.closest("[data-oa]");

@@ -321,6 +321,19 @@ h1.logo{font-family:var(--cond);font-weight:400;color:var(--red);text-align:cent
 #tab-list table{min-width:1280px}
 .detail-dlg{width:min(720px,94vw);max-height:88vh;overflow:auto;padding:20px 22px}
 .detail-dlg::backdrop{background:rgba(0,0,0,.45)}
+.card [data-view-actor]{cursor:pointer}
+.card .ph[data-view-actor]:hover{filter:brightness(1.08)}
+.card .c-head[data-view-actor]:hover .c-name{text-decoration:underline;text-underline-offset:4px}
+.card [data-view-actor]:focus-visible{outline:2px solid var(--yellow,#feca1f);outline-offset:3px}
+.av-top{display:grid;grid-template-columns:220px 1fr;gap:18px;align-items:start}
+.av-ph{aspect-ratio:3/4;background:#2f2d28 center/cover no-repeat;display:flex;align-items:center;justify-content:center;color:#fff}
+.av-ph b{font-size:72px;font-weight:300}
+.av-no{font-family:"Bebas Neue",sans-serif;font-size:1.3em;letter-spacing:.04em;margin-right:4px}
+.tbl-wrap{overflow-x:auto}
+.av-tbl{width:100%;border-collapse:collapse;font-size:13px}
+.av-tbl th,.av-tbl td{padding:6px 8px;border-bottom:1px solid #eee;text-align:left}
+@media (max-width:620px){.av-top{grid-template-columns:1fr}.av-ph{max-width:240px}}
+
 #d-title .pill{font-size:12px;vertical-align:middle;margin-left:6px}
 .d-sec{border-top:1px solid var(--line);padding:12px 0 4px}
 .d-sec h4{margin:0 0 8px;font-size:13px;color:var(--red);font-weight:500;letter-spacing:.06em}
@@ -602,6 +615,7 @@ table.xl td.rem{text-align:left;white-space:normal;min-width:240px}
   <div class="bar" style="justify-content:flex-end;margin-top:10px"><button class="btn" value="cancel" formnovalidate>取消</button><button class="btn primary" id="e-save" type="button">儲存修改</button></div>
 </form></dialog>
 <dialog id="receipt" class="receipt-dlg" aria-labelledby="r-title"><div class="receipt" id="r-body"></div><form method="dialog" class="r-actions"><button class="btn primary" value="ok">收下</button></form></dialog>
+<dialog id="actor-view" class="detail-dlg" aria-labelledby="av-title"><div class="dlg-head"><h3 id="av-title" style="margin:0"></h3><button class="dlg-x" id="av-x" aria-label="關閉視窗">×</button></div><div id="av-body"></div><div class="bar" style="justify-content:flex-end;margin-top:12px"><button class="btn primary" id="av-edit">編輯</button><button class="btn primary" id="av-book">點這位</button></div></dialog>
 <dialog id="actor-dlg">
   <form id="actor-form" method="dialog" class="form" style="gap:10px 14px">
     <div class="wide dlg-head"><h3 id="dlg-title" style="margin:0">新增演員</h3><button class="dlg-x" value="cancel" formnovalidate aria-label="關閉視窗">×</button></div>
