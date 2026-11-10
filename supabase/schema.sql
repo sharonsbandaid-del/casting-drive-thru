@@ -52,6 +52,7 @@ create table public.actors (
   tags            text[] not null default '{}',
   note            text,
   photo_path      text,                       -- Storage：actor-photos 裡的檔名
+  video_links     text,                       -- 影片連結，一行一個
   -- 合約與肖像授權條件（預約時快照帶入）
   portrait_months int  not null check (portrait_months in (3,6,12,24)),
   renew_days      int  not null default 30,

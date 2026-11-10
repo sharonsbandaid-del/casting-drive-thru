@@ -330,6 +330,10 @@ h1.logo{font-family:var(--cond);font-weight:400;color:var(--red);text-align:cent
 .av-ph b{font-size:72px;font-weight:300}
 .av-no{font-family:"Bebas Neue",sans-serif;font-size:1.3em;letter-spacing:.04em;margin-right:4px}
 .tbl-wrap{overflow-x:auto}
+.av-links{margin:0;padding-left:18px;font-size:14px}
+.av-links li{margin:2px 0;word-break:break-all}
+.c-video{color:var(--yellow,#feca1f);text-decoration:none;font-size:13px}
+.c-video:hover{text-decoration:underline}
 .av-tbl{width:100%;border-collapse:collapse;font-size:13px}
 .av-tbl th,.av-tbl td{padding:6px 8px;border-bottom:1px solid #eee;text-align:left}
 @media (max-width:620px){.av-top{grid-template-columns:1fr}.av-ph{max-width:240px}}
@@ -637,6 +641,7 @@ table.xl td.rem{text-align:left;white-space:normal;min-width:240px}
     <label>接案狀態<select id="a-status"><option>可接案</option><option>暫停接案</option></select></label>
     <label>可拍時段<input type="text" id="a-time" placeholder="平日白天、週末"></label>
     <label class="wide">類型標籤（以逗號分隔）<input type="text" id="a-tags" placeholder="活潑, 可講台詞"></label>
+    <label class="wide">影片連結（一行一個網址）<textarea id="a-video" rows="2" placeholder="https://youtube.com/…&#10;https://drive.google.com/…"></textarea></label>
     <label class="wide">備註<input type="text" id="a-note"></label>
     <h3 class="wide sec">合約與肖像授權條件 <span class="tag">廣代預約時直接帶入</span></h3>
     <label>肖像權期間（合約長度）<span class="req">必填</span><select id="t-length"><option value="">請選擇</option><option value="3">3個月</option><option value="6">6個月</option><option value="12">1年</option><option value="24">2年</option></select><span class="hint">廣代預約時，合約截止日依此自動計算</span></label>

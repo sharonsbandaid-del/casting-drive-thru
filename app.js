@@ -107,7 +107,7 @@ function renderPool(){
       '<div class="ph" data-view-actor="'+a.id+'" role="button" tabindex="0" aria-label="查看 '+esc(a.name)+' 的細節"'+(a.photo?' style="background-image:url(&quot;'+a.photo+'&quot;)"':'')+'>'+(a.photo?'':'<b>'+esc(a.name.slice(-1))+'</b>')+'<span class="st-pill'+(a.status==="暫停接案"?" off":"")+'">'+esc(a.status)+'</span></div>'+
       '<div class="c-meta">'+esc(a.gender)+'・'+age(a.birth)+' 歲・'+esc(a.height)+' cm・衣 '+esc(a.size)+'</div>'+
       '<div class="chips c-tags">'+a.tags.map(t=>'<span class="chip">'+esc(t)+'</span>').join("")+'</div>'+
-      '<div class="c-info">可拍攝日：'+esc(a.time||"—")+'<br>拍攝歷：'+esc(hist.line||"—")+(koc?'<br><span class="chip koc">KOC</span> 已綁 '+esc(koc.product)+'（至 '+esc(slash(koc.end))+'）':'')+(a.note?'<br>備註：'+esc(a.note):'')+'</div>'+
+      '<div class="c-info">可拍攝日：'+esc(a.time||"—")+'<br>拍攝歷：'+esc(hist.line||"—")+(koc?'<br><span class="chip koc">KOC</span> 已綁 '+esc(koc.product)+'（至 '+esc(slash(koc.end))+'）':'')+(a.note?'<br>備註：'+esc(a.note):'')+((a.videos||[]).filter(v=>/^https?:\/\//.test(v)).length?'<br><a class="c-video" href="'+esc(a.videos.find(v=>/^https?:\/\//.test(v)))+'" target="_blank" rel="noopener">▶ 看影片'+(a.videos.length>1?'（'+a.videos.length+' 支）':'')+'</a>':'')+'</div>'+
       '<div class="c-act">'+(role==="casting" ? '<button class="btn sm c-btn" data-edit="'+a.id+'">編輯</button>' :
         '<button class="btn sm c-btn" data-book="'+a.id+'"'+(a.status==="暫停接案"?" disabled":"")+'>'+(a.status==="暫停接案"?"暫停供應":"點這位")+'</button>')+
       '</div></article>';
@@ -294,6 +294,7 @@ function openActorView(id){
     '<div class="av-info">'+sec("基本資料",[["演員編號",a.id],["性別",a.gender],["年齡",a.birth?age(a.birth)+" 歲（"+a.birth.replace("-","/")+"）":""],["身高",a.height!==""?a.height+" cm":""],["衣服尺寸",a.size],["可拍攝日",a.time],["最後更新",a.updated?slash(a.updated):""]])+
     (a.tags.length?'<div class="chips" style="margin-top:8px">'+a.tags.map(x=>'<span class="chip">'+esc(x)+'</span>').join("")+'</div>':'')+
     (a.note?'<p class="meta" style="margin-top:8px">備註：'+esc(a.note)+'</p>':'')+'</div></div>'+
+    '<section class="d-sec"><h4>影片連結</h4>'+((a.videos||[]).length?'<ul class="av-links">'+a.videos.map((v,i)=>'<li>'+(/^https?:\/\//.test(v)?'<a href="'+esc(v)+'" target="_blank" rel="noopener">▶ 影片 '+(i+1)+'</a> <span class="meta">'+esc(v)+'</span>':esc(v))+'</li>').join("")+'</ul>':'<p class="meta">尚未提供</p>')+'</section>'+
     sec("合約與肖像授權",[["肖像權期間",t.length?lenLabel(t.length):""],["合約更新提醒",t.renew?"到期前 "+t.renew+" 天":""],["WEB平台",(t.web||[]).join("、")],["二次利用",t.second],["AI 修圖 / 影片生成",t.ai],["綁競品（成分 / 功效）",(t.ci||"—")+" / "+(t.ce||"—")],["拍攝費（每人次）",money(t.fee)],["超時費",money(t.ot)],["保密合約",t.nda]])+
     '<section class="d-sec"><h4>拍攝紀錄</h4>'+
       '<p class="meta" style="margin:0 0 6px">共 '+shoots+' 人次・'+list.filter(counts).length+' 支素材'+(koc?'　｜　<span class="chip koc">KOC</span> 已綁 '+esc(koc.product)+'（至 '+esc(slash(koc.end))+'）':'')+'</p>'+
@@ -595,7 +596,7 @@ function openActor(id){
   $("a-id").value = a?a.id:"";
   $("a-name").value=a?a.name:""; $("a-gender").value=a?a.gender:"女"; $("a-birth").value=a?a.birth:"";
   $("a-height").value=a?a.height:""; $("a-size").value=a?a.size:""; $("a-status").value=a?a.status:"可接案";
-  $("a-time").value=a?a.time:""; $("a-tags").value=a?a.tags.join(", "):""; $("a-note").value=a?a.note:"";
+  $("a-time").value=a?a.time:""; $("a-tags").value=a?a.tags.join(", "):""; $("a-note").value=a?a.note:""; $("a-video").value=a?(a.videos||[]).join("\n"):"";
   const t=(a&&a.terms)||{length:"",renew:30,web:["IG","FB"],second:"○",ai:"X",ci:"X",ce:"X",fee:"",ot:"",nda:"已簽"};
   $("t-length").value=t.length; $("t-renew").value=t.renew; $("t-fee").value=t.fee; $("t-ot").value=t.ot;
   $("t-second").value=t.second; $("t-ai").value=t.ai; $("t-ci").value=t.ci; $("t-ce").value=t.ce; $("t-nda").value=t.nda;
@@ -633,7 +634,7 @@ $("actor-dlg").addEventListener("close",async()=>{
   if(v==="save" && $("a-name").value.trim()){
     const row={name:$("a-name").value.trim(),gender:$("a-gender").value,birth_ym:$("a-birth").value.trim()||null,
       height:$("a-height").value?Number($("a-height").value):null,size:$("a-size").value.trim()||null,status:$("a-status").value,avail_time:$("a-time").value.trim()||null,
-      tags:$("a-tags").value.split(/[,，]/).map(s=>s.trim()).filter(Boolean),note:$("a-note").value.trim()||null,
+      tags:$("a-tags").value.split(/[,，]/).map(s=>s.trim()).filter(Boolean),note:$("a-note").value.trim()||null,video_links:$("a-video").value.split(/\n/).map(x=>x.trim()).filter(Boolean).join("\n")||null,
       portrait_months:Number($("t-length").value),renew_days:Number($("t-renew").value),web:[...document.querySelectorAll('input[name="tweb"]:checked')].map(x=>x.value),
       second_use:$("t-second").value,ai_use:$("t-ai").value,comp_ingredient:$("t-ci").value,comp_effect:$("t-ce").value,
       shoot_fee:$("t-fee").value?Number($("t-fee").value):null,overtime_fee:$("t-ot").value?Number($("t-ot").value):null,nda:$("t-nda").value};
@@ -700,7 +701,7 @@ async function reload(silent){
   const paths=(A.data||[]).map(a=>a.photo_path).filter(Boolean); let urls={};
   if(paths.length){ const s=await sb.storage.from("actor-photos").createSignedUrls(paths, 60*60*6); (s.data||[]).forEach(x=>{ if(x.signedUrl) urls[x.path]=x.signedUrl; }); }
   actors=(A.data||[]).map(r=>({ id:r.id, name:r.name, gender:r.gender||"", birth:r.birth_ym||"", height:r.height??"", size:r.size||"", status:r.status,
-    time:r.avail_time||"", tags:r.tags||[], note:r.note||"", archived:!!r.archived, photo:r.photo_path?urls[r.photo_path]||null:null, photo_path:r.photo_path,
+    time:r.avail_time||"", tags:r.tags||[], note:r.note||"", videos:(r.video_links||"").split(/\n/).map(x=>x.trim()).filter(Boolean), archived:!!r.archived, photo:r.photo_path?urls[r.photo_path]||null:null, photo_path:r.photo_path,
     updated:(r.updated_at||"").slice(0,10), terms:{ length:r.portrait_months, renew:r.renew_days, web:r.web||[], second:r.second_use, ai:r.ai_use,
     ci:r.comp_ingredient, ce:r.comp_effect, fee:r.shoot_fee??"", ot:r.overtime_fee??"", nda:r.nda } }));
   bookings=(B.data||[]).map(r=>mapBooking(r,logs));
