@@ -188,7 +188,11 @@ header .role button.on{background:var(--yellow);color:var(--black)}
 .r-status{text-align:center;font-size:13px;background:var(--yellow);border-radius:8px;padding:6px}
 .r-bar{height:38px;margin:14px 10px 6px;background:repeating-linear-gradient(90deg,#141414 0 2px,transparent 2px 4px,#141414 4px 7px,transparent 7px 9px,#141414 9px 10px,transparent 10px 13px)}
 .r-thanks{text-align:center;font-size:11px;letter-spacing:.14em;color:var(--muted)}
-.r-actions{display:flex;justify-content:center;margin-top:14px}
+.r-actions{display:flex;justify-content:center;gap:8px;margin-top:14px;flex-wrap:wrap}
+.r-btn{background:#fff;color:var(--black);border:0}
+.r-msg{text-align:center;color:#fff;font-size:13px;margin-top:10px;min-height:1em}
+.r-snap{-webkit-mask:none!important;mask:none!important;box-shadow:none!important;animation:none!important}
+.r-snap .r-bar{display:none}
 .receipt-dlg::backdrop{background:rgba(0,0,0,.5)}
 @media (prefers-reduced-motion:no-preference){.receipt-dlg[open] .receipt{animation:print .45s ease-out}}
 @keyframes print{from{transform:translateY(-24px);opacity:0}to{transform:none;opacity:1}}
@@ -584,7 +588,7 @@ table.xl td.rem{text-align:left;white-space:normal;min-width:240px}
 </div>
 
 <div id="toast" class="toast hidden" role="status" aria-live="polite"></div>
-<dialog id="detail" class="detail-dlg" aria-labelledby="d-title"><div class="dlg-head"><h3 id="d-title" style="margin:0"></h3><button class="dlg-x" id="d-x" aria-label="關閉視窗">×</button></div><div id="d-body"></div><div class="bar" style="justify-content:flex-end;margin-top:12px"><button class="btn primary" id="d-edit">編輯內容</button></div></dialog>
+<dialog id="detail" class="detail-dlg" aria-labelledby="d-title"><div class="dlg-head"><h3 id="d-title" style="margin:0"></h3><button class="dlg-x" id="d-x" aria-label="關閉視窗">×</button></div><div id="d-body"></div><div class="bar" style="justify-content:flex-end;margin-top:12px;align-items:center"><span class="meta" id="d-msg" role="status" style="margin-right:auto"></span><button class="btn" id="d-copy">複製文字</button><button class="btn" id="d-out">看收據・存成圖片</button><button class="btn primary" id="d-edit">編輯內容</button></div></dialog>
 <dialog id="deldlg" class="detail-dlg" style="width:min(480px,94vw)" aria-labelledby="del-title"><form method="dialog" novalidate>
   <div class="dlg-head"><h3 id="del-title" style="margin:0">刪除預約</h3><button class="dlg-x" value="cancel" formnovalidate aria-label="關閉視窗">×</button></div>
   <p class="meta" id="del-info" style="margin:6px 0 12px"></p>
@@ -618,7 +622,7 @@ table.xl td.rem{text-align:left;white-space:normal;min-width:240px}
   <div id="e-msg"></div>
   <div class="bar" style="justify-content:flex-end;margin-top:10px"><button class="btn" value="cancel" formnovalidate>取消</button><button class="btn primary" id="e-save" type="button">儲存修改</button></div>
 </form></dialog>
-<dialog id="receipt" class="receipt-dlg" aria-labelledby="r-title"><div class="receipt" id="r-body"></div><form method="dialog" class="r-actions"><button class="btn primary" value="ok">收下</button></form></dialog>
+<dialog id="receipt" class="receipt-dlg" aria-labelledby="r-title"><div class="receipt" id="r-body"></div><div class="r-msg" id="r-msg" role="status"></div><form method="dialog" class="r-actions"><button type="button" class="btn r-btn" id="r-img">存成圖片</button><button type="button" class="btn r-btn" id="r-copy">複製文字</button><button class="btn primary" value="ok">收下</button></form></dialog>
 <dialog id="actor-view" class="detail-dlg" aria-labelledby="av-title"><div class="dlg-head"><h3 id="av-title" style="margin:0"></h3><button class="dlg-x" id="av-x" aria-label="關閉視窗">×</button></div><div id="av-body"></div><div class="bar" style="justify-content:flex-end;margin-top:12px"><button class="btn primary" id="av-edit">編輯</button><button class="btn primary" id="av-book">點這位</button></div></dialog>
 <dialog id="actor-dlg">
   <form id="actor-form" method="dialog" class="form" style="gap:10px 14px">

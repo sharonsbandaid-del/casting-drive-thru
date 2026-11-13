@@ -446,16 +446,73 @@ $("dl-xlsx").addEventListener("click",async()=>{
   setTimeout(()=>btn.textContent="匯出 Excel",1500);
 });
 
+const WD="日一二三四五六";
+const slashW = d => d ? slash(d)+"（"+WD[new Date(d+"T00:00:00").getDay()]+"）" : "";
+function receiptInfo(b){
+  const a=actorById(b.actor)||{name:b.actor}; const cycle=b.cycle; const shots=cycleShoots(cycle);
+  const sib=bookings.filter(x=>x.shoot===b.shoot&&counts(x)).sort((x,y)=>x.id.localeCompare(y.id));
+  const ex = sib.length>0 && sib[0].id!==b.id; const k=shots.findIndex(sh=>sh.id===b.shoot)+1;
+  return { a, ex, point: ex?"併入同場，不另計點":(k>0?"第 "+cycle+" 期 第 "+k+" / 7 點":"第 "+cycle+" 期") };
+}
+let receiptBk=null;
 function openReceipt(b, ex, cycle){
-  const a=actorById(b.actor)||{name:b.actor}; const shots=cycleShoots(cycle); const k=shots.findIndex(sh=>sh.id===b.shoot)+1;
+  receiptBk=b; const info=receiptInfo(b); const a=info.a;
+  const point = (ex!==undefined && cycle!==undefined) ? (ex?"併入同場，不另計點":"第 "+cycle+" 期 第 "+(cycleShoots(cycle).findIndex(sh=>sh.id===b.shoot)+1)+" / 7 點") : info.point;
+  const st = b.status==="待確認"||!b.status ? "待 Casting 確認檔期" : b.status;
   const row=(l,v)=>'<div class="r-row"><span>'+esc(l)+'</span><span>'+esc(v)+'</span></div>';
   $("r-body").innerHTML='<div class="r-shop" id="r-title">Casting Drive-Thru</div><div class="r-sub">演員預約平台・點餐單</div><div class="r-cut"></div>'+
     '<div class="r-lbl">素材管理編號</div><div class="r-no">'+esc(bkName(b))+'</div><div class="r-cut"></div>'+
-    row("演員",a.name+"（"+b.actor+"）")+row("商品",b.product+"・"+b.team)+row("拍攝需求",b.role)+row("素材",b.title)+row("拍攝日",slash(b.date))+row("預估時數",b.hours+" 小時")+
-    '<div class="r-cut"></div>'+row("集點",ex?"併入同場，不另計點":"第 "+cycle+" 期 第 "+k+" / 7 點")+row("登記人",b.by||myName())+
-    '<div class="r-cut"></div><div class="r-status">狀態：待 Casting 確認檔期</div><div class="r-bar" aria-hidden="true"></div><div class="r-thanks">THANK YOU ・ 請等候叫號</div>';
+    row("演員",a.name+"（"+b.actor+"）")+row("商品",b.product+"・"+b.team)+row("拍攝需求",b.role)+row("素材",b.title)+row("拍攝日",slashW(b.date))+row("預估時數",b.hours+" 小時")+(b.place?row("拍攝地點",b.place):"")+
+    '<div class="r-cut"></div>'+row("集點",point)+row("登記人",b.by||myName())+
+    '<div class="r-cut"></div><div class="r-status">狀態：'+esc(st)+'</div><div class="r-bar" aria-hidden="true"></div><div class="r-thanks">THANK YOU ・ 請等候叫號</div>';
+  $("r-msg").textContent="";
   $("receipt").showModal();
 }
+function receiptText(b){
+  const info=receiptInfo(b); const a=info.a;
+  const st = b.status==="待確認"||!b.status ? "待 Casting 確認檔期" : b.status;
+  return ["【Casting Drive-Thru 預約】",
+    "素材管理編號："+bkName(b),
+    "演員："+a.name+"（"+b.actor+"）",
+    "商品："+b.product+"・"+b.team,
+    "拍攝需求："+b.role,
+    "素材："+b.title,
+    "拍攝日："+slashW(b.date),
+    "預估時數："+b.hours+" 小時",
+    b.place?"拍攝地點："+b.place:null,
+    "集點："+info.point,
+    "登記人："+(b.by||myName()),
+    "狀態："+st].filter(Boolean).join("\n");
+}
+async function copyText(t){
+  try{ await navigator.clipboard.writeText(t); return true; }
+  catch(e){ const ta=document.createElement("textarea"); ta.value=t; ta.style.position="fixed"; ta.style.opacity="0"; document.body.appendChild(ta); ta.select();
+    let ok=false; try{ ok=document.execCommand("copy"); }catch(_){} ta.remove(); return ok; }
+}
+let h2cP=null;
+function loadH2C(){ if(window.html2canvas) return Promise.resolve(); if(h2cP) return h2cP;
+  h2cP=new Promise((res,rej)=>{ const sc=document.createElement("script"); sc.src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"; sc.onload=res; sc.onerror=()=>{ h2cP=null; rej(new Error("load")); }; document.head.appendChild(sc); });
+  return h2cP; }
+async function saveReceiptImage(){
+  const b=receiptBk; if(!b) return; const msg=$("r-msg"); msg.textContent="產生圖片中…";
+  try{
+    await loadH2C();
+    const el=$("r-body"); el.classList.add("r-snap");
+    const canvas=await window.html2canvas(el,{scale:2,backgroundColor:"#fffdf7",useCORS:true});
+    el.classList.remove("r-snap");
+    const name=(bkName(b)+"_"+((actorById(b.actor)||{}).name||b.actor)).replace(/[\\/:*?"<>|\s]+/g,"_")+".png";
+    const blob=await new Promise(r=>canvas.toBlob(r,"image/png"));
+    const file=new File([blob],name,{type:"image/png"});
+    if(navigator.canShare && navigator.canShare({files:[file]}) && /Mobi|Android|iPhone|iPad/.test(navigator.userAgent)){
+      try{ await navigator.share({files:[file],title:bkName(b)}); msg.textContent=""; return; }catch(e){ if(e&&e.name==="AbortError"){ msg.textContent=""; return; } }
+    }
+    const url=URL.createObjectURL(blob); const link=document.createElement("a"); link.href=url; link.download=name; document.body.appendChild(link); link.click(); link.remove();
+    setTimeout(()=>URL.revokeObjectURL(url),2000);
+    msg.textContent="已下載圖片：「"+name+"」，可以直接拖進 LINE 傳送";
+  }catch(e){ $("r-body").classList.remove("r-snap"); msg.textContent="圖片產生失敗，請改用「複製文字」或截圖"; }
+}
+$("r-img").onclick=saveReceiptImage;
+$("r-copy").onclick=async()=>{ if(!receiptBk) return; $("r-msg").textContent = await copyText(receiptText(receiptBk)) ? "已複製，到 LINE 貼上就可以了" : "複製失敗，請手動選取文字"; };
 /* 預約總表：內容檢視 */
 function openDetail(id){
   const b=bookings.find(x=>x.id===id); if(!b) return; const a=actorById(b.actor)||{name:b.actor};
@@ -471,7 +528,7 @@ function openDetail(id){
     sec("腳本與備考",[["腳本",b.script?(isUrl?'<a href="'+esc(b.script)+'" target="_blank" rel="noopener">開啟腳本連結</a><div class="meta">'+esc(b.script)+'</div>':esc(b.script)):"—",true],["備考",b.note]])+
     '<section class="d-sec"><h4>狀態紀錄</h4>'+((b.log||[]).length?'<ul class="d-log">'+b.log.map(l=>'<li>'+esc(l.at)+'・'+esc(l.who)+'：'+esc(l.from)+' → '+esc(l.to)+'</li>').join("")+'</ul>':'<p class="meta">尚無變更紀錄</p>')+'</section>';
   if(b.status==="已刪除") $("d-body").insertAdjacentHTML("afterbegin",'<div class="msg err" style="margin-bottom:8px">已刪除・原因：'+esc(b.delReason||"—")+'（'+esc(b.delBy||"")+' '+esc(b.delAt||"")+'）</div>');
-  $("d-edit").classList.toggle("hidden", role==="casting" || !counts(b)); $("d-edit").dataset.id=b.id;
+  $("d-edit").classList.toggle("hidden", role==="casting" || !counts(b)); $("d-edit").dataset.id=b.id; $("d-out").classList.toggle("hidden", b.status==="已刪除"); $("d-out").dataset.id=b.id; $("d-copy").classList.toggle("hidden", b.status==="已刪除"); $("d-copy").dataset.id=b.id; $("d-msg").textContent="";
   $("detail").showModal();
 }
 $("d-x").onclick=()=>$("detail").close();
@@ -497,6 +554,8 @@ function openEditBk(id){
   $("editbk").returnValue=""; $("editbk").showModal();
 }
 $("d-edit").onclick=()=>openEditBk($("d-edit").dataset.id);
+$("d-out").onclick=()=>{ const b=bookings.find(x=>x.id===$("d-out").dataset.id); if(!b) return; $("detail").close(); openReceipt(b); };
+$("d-copy").onclick=async()=>{ const b=bookings.find(x=>x.id===$("d-copy").dataset.id); if(!b) return; $("d-msg").textContent = await copyText(receiptText(b)) ? "已複製，到 LINE 貼上就可以了" : "複製失敗"; };
 $("e-date").addEventListener("change",()=>{ const ch=$("e-date").value!==$("e-date").dataset.orig; const n=Number($("e-date").dataset.sib||0);
   $("e-date-hint").textContent = ch ? "改期後這支素材會獨立成 "+slash($("e-date").value)+" 的拍攝"+(n?"，同場其他 "+n+" 支留在原日期":"") : (n?"同場還有 "+n+" 支素材":""); });
 $("editbk").addEventListener("click",e=>{ if(e.target===$("editbk")) $("editbk").close("cancel"); });
