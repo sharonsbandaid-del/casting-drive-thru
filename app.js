@@ -105,10 +105,10 @@ function renderPool(){
     return '<article class="card v2 '+(list.indexOf(a)%2?'red':'dark')+(a.status==="暫停接案"?" off":"")+'">'+
       '<div class="c-head" data-view-actor="'+a.id+'" role="button" tabindex="0" title="查看演員細節"><span class="c-no">'+esc(a.id.replace(/\D/g,"").padStart(3,"0").slice(-3))+'</span><span class="c-name">'+esc(a.name)+'</span></div>'+
       '<div class="ph" data-view-actor="'+a.id+'" role="button" tabindex="0" aria-label="查看 '+esc(a.name)+' 的細節"'+(a.photo?' style="background-image:url(&quot;'+a.photo+'&quot;)"':'')+'>'+(a.photo?'':'<b>'+esc(a.name.slice(-1))+'</b>')+'<span class="st-pill'+(a.status==="暫停接案"?" off":"")+'">'+esc(a.status)+'</span></div>'+
-      '<div class="c-meta">'+esc(a.gender)+'・'+age(a.birth)+' 歲・'+esc(a.height)+' cm・衣 '+esc(a.size)+'</div>'+
+      '<div class="c-meta">'+esc([a.gender, a.birth?age(a.birth)+' 歲':'', a.height!==''&&a.height!=null?a.height+' cm':'', a.size?'衣 '+a.size:''].filter(Boolean).join('・'))+'</div>'+
       '<div class="chips c-tags">'+a.tags.map(t=>'<span class="chip">'+esc(t)+'</span>').join("")+'</div>'+
       '<div class="c-info">可拍攝日：'+esc(a.time||"—")+'<br>拍攝歷：'+esc(hist.line||"—")+(koc?'<br><span class="chip koc">KOC</span> 已綁 '+esc(koc.product)+'（至 '+esc(slash(koc.end))+'）':'')+(a.note?'<br>備註：'+esc(a.note):'')+((a.videos||[]).filter(v=>/^https?:\/\//.test(v)).length?'<br><a class="c-video" href="'+esc(a.videos.find(v=>/^https?:\/\//.test(v)))+'" target="_blank" rel="noopener">▶ 看影片'+(a.videos.length>1?'（'+a.videos.length+' 支）':'')+'</a>':'')+'</div>'+
-      '<div class="c-act">'+(role==="casting" ? '<button class="btn sm c-btn" data-edit="'+a.id+'">編輯</button>' :
+      '<div class="c-act"><button class="btn sm c-view" data-view-actor="'+a.id+'">檢視</button>'+(role==="casting" ? '<button class="btn sm c-btn" data-edit="'+a.id+'">編輯</button>' :
         '<button class="btn sm c-btn" data-book="'+a.id+'"'+(a.status==="暫停接案"?" disabled":"")+'>'+(a.status==="暫停接案"?"暫停供應":"點這位")+'</button>')+
       '</div></article>';
   }).join("") || '<p class="note">沒有符合條件的演員。</p>';
