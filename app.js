@@ -17,7 +17,11 @@ const save = ()=>{};  /* 正式版：資料都存在 Supabase，不再存本機 
 let role = "agency", tab = "pool";
 const $ = id => document.getElementById(id);
 const esc = s => String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
-const age = b => { if(!b||!/^\d{4}-\d{1,2}/.test(b)) return "—"; const [y,m]=b.split("-").map(Number); let a = today.getFullYear()-y; if(today.getMonth()+1<m) a--; return a; };
+const parseBirth = b => { const t=String(b||"").trim(); if(!t) return null;
+  let m=t.match(/^(\d{4})(?:\s*[-\/.年]\s*(\d{1,2}))?/); if(m) return {y:+m[1], m:m[2]?+m[2]:null};
+  m=t.match(/^(?:民國)?\s*(\d{2,3})(?:\s*[-\/.年]\s*(\d{1,2}))?/); if(m) return {y:+m[1]+1911, m:m[2]?+m[2]:null};
+  return null; };
+const age = b => { const p=parseBirth(b); if(!p||p.y<1900||p.y>today.getFullYear()) return "—"; let a=today.getFullYear()-p.y; if(p.m&&today.getMonth()+1<p.m) a--; return a; };
 const actorById = id => actors.find(a=>a.id===id);
 const counts = b => b.status!=="已取消" && b.status!=="已刪除";
 const cycBk = () => bookings.filter(b=>b.cycle===cyc);
