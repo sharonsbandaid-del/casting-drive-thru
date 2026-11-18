@@ -111,6 +111,8 @@ table.xl th.red{color:#c0392b}
 table.xl td{border:1px solid var(--line);text-align:center;font-size:13px;vertical-align:middle}
 table.xl td.prod{font-weight:500}
 table.xl tr.due td{background:color-mix(in srgb,var(--warn) 14%,transparent)}
+table.xl tr.expired td{background:#efefef;color:#8a8a8a}
+table.xl tr.expired .thumb{opacity:.55}
 .thumb{width:34px;height:34px;border-radius:6px;display:inline-flex;align-items:center;justify-content:center;color:#fff;font-weight:500}
 .wrap>*{min-width:0}
 table.xl td:nth-child(-n+3),table.xl th{white-space:nowrap}
@@ -524,7 +526,8 @@ table.xl td.rem{text-align:left;white-space:normal;min-width:240px}
   <!-- 契約者一覽表 -->
   <section id="tab-export" class="hidden">
     <div class="bar" style="margin-bottom:12px">
-      <select id="x-scope" aria-label="匯出範圍"><option value="all">全部合約（不含取消）</option><option value="cycle">只看目前期數</option></select>
+      <select id="x-scope" aria-label="篩選"><option value="all">全部合約（不含取消）</option></select>
+      <select id="x-sort" aria-label="排序"><option value="product">依商品排序</option><option value="cycle">依期數排序</option><option value="start">依合約開始日（OA日）排序</option><option value="end">依合約截止日排序</option></select>
       <span class="note grow" id="x-hint"></span>
       <button class="btn" id="copy-tsv">複製表格（貼到 Excel）</button>
       <button class="btn primary" id="dl-xlsx">匯出 Excel</button>
@@ -533,7 +536,7 @@ table.xl td.rem{text-align:left;white-space:normal;min-width:240px}
       <thead><tr id="x-head"></tr></thead>
       <tbody id="xrows"></tbody>
     </table></div>
-    <p class="note">橘色列：已到合約更新提醒日，需和 Casting 公司確認是否續約。拍攝費以拍攝人次計算：同場多支素材只在第一支列出金額，其餘標「同場已計」。發票日期預設沿用該期的請款日；點「發票日期」或「備考」那一格就能直接修改，按儲存才會生效（紅色粗體＝已個別修改的發票日期）。</p>
+    <p class="note">灰色列：合約已到期。橘色列：已到合約更新提醒日，需和 Casting 公司確認是否續約。拍攝費以拍攝人次計算：同場多支素材只在第一支列出金額，其餘標「同場已計」。點「備考」那一格就能直接修改，按儲存才會生效。</p>
   </section>
 
   <!-- 規則 -->
@@ -675,7 +678,7 @@ table.xl td.rem{text-align:left;white-space:normal;min-width:240px}
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js"></script>
-<script src="config.js?v=202611161307"></script>
-<script src="app.js?v=202611161307"></script>
+<script src="config.js?v=202611181137"></script>
+<script src="app.js?v=202611181137"></script>
 </body>
 </html>

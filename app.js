@@ -199,41 +199,51 @@ function renderRows(){
 }
 
 /* 契約者一覽表 */
-const XCOLS = [["商品",8],["演員編號",10],["姓名",10],["照片",8],["拍攝需求",12],["素材管理編號",14],["素材篇名",18],["拍攝日期",12],["本素材合約開始日\n(OA日)",14],["合約截止日",12],["肖像權期間",10],["合約更新提醒日",14],["WEB平台",20],["二次利用",8],["AI修圖/\n影片生成",10],["綁競品\n(成分)",8],["綁競品\n(功効)",8],["保密合約",8],["拍攝費",12],["腳本",24],["負責組別",10],["登記人",10],["發票日期",12,1],["備考",30,1]];
+const XCOLS = [["商品",8],["演員編號",10],["姓名",10],["照片",8],["拍攝需求",12],["素材管理編號",14],["素材篇名",18],["拍攝日期",12],["本素材合約開始日\n(OA日)",14],["合約截止日",12],["肖像權期間",10],["合約更新提醒日",14],["WEB平台",20],["二次利用",8],["AI修圖/\n影片生成",10],["綁競品\n(成分)",8],["綁競品\n(功効)",8],["保密合約",8],["拍攝費",12],["腳本",24],["負責組別",10],["登記人",10],["備考",30,1]];
 const XHEAD = XCOLS.map(c=>c[0]);
 const X_FEE = XHEAD.indexOf("拍攝費"), X_PHOTO = XHEAD.indexOf("照片");
 const invOf = b => b.inv || (cycleInv||{})[b.cycle] || "";
 function exportRows(){
-  const scope=$("x-scope").value;
+  const scope=$("x-scope").value, sort=$("x-sort").value, td=fmt(today);
   const feeOwner={}; [...bookings].filter(counts).sort((x,y)=>x.date.localeCompare(y.date)||x.id.localeCompare(y.id)).forEach(b=>{ if(!feeOwner[b.shoot]) feeOwner[b.shoot]=b.id; });
-  return bookings.filter(b=>counts(b)&&(scope==="all"||b.cycle===cyc))
-    .sort((a,b)=>PORDER.indexOf(a.product)-PORDER.indexOf(b.product)||a.date.localeCompare(b.date))
+  const isExp = b => { const e=endOf(b.start,b.length); return !!e && e<td; };
+  const endKey = b => endOf(b.start,b.length) || "9999";
+  return bookings.filter(b=>counts(b)&&(scope==="all"||(scope==="expired"&&isExp(b))||(scope==="active"&&!isExp(b))||(scope.startsWith("c")&&b.cycle===Number(scope.slice(1)))))
+    .sort((a,b)=> sort==="cycle" ? (a.cycle-b.cycle||a.date.localeCompare(b.date)||a.id.localeCompare(b.id))
+      : sort==="start" ? ((a.start||"9999").localeCompare(b.start||"9999")||a.date.localeCompare(b.date))
+      : sort==="end" ? (endKey(a).localeCompare(endKey(b))||a.date.localeCompare(b.date))
+      : (PORDER.indexOf(a.product)-PORDER.indexOf(b.product)||a.date.localeCompare(b.date)))
     .map(b=>{
       const a=actorById(b.actor)||{name:b.actor};
       const sib=bookings.filter(x=>x.shoot===b.shoot&&counts(x)); const hrs=sib.reduce((t,x)=>t+Number(x.hours||0),0);
       const auto=["第"+b.cycle+"期"]; if(sib.length>1) auto.push("同日同場（共"+sib.length+"支，算1人次，"+hrs+"h）"); if(hrs>CAP) auto.push("超時 "+(hrs-CAP)+"h × "+money(b.ot));
       const extra=[...auto]; if(b.note) extra.push(b.note);
       const end=endOf(b.start,b.length), renewDate=renewOf(b.start,b.length,b.renew);
-      return {b, auto: auto.join("；"), feeHere: feeOwner[b.shoot]===b.id, due: renewDate && renewDate<=fmt(today) && end>=fmt(today),
-        cells:[b.product,b.actor,a.name,b.actor,b.role,b.mno||"",b.title,slash(b.date),b.start?slash(b.start):"OA未定",slash(end),lenLabel(b.length),renewDate?slash(renewDate)+"（"+b.renew+"天前）":"",(b.web||[]).join("、"),b.second,b.ai,b.ci,b.ce,b.nda||"",(feeOwner[b.shoot]===b.id?money(b.fee):"同場已計"),b.script||"",b.team||"",b.by||"",slash(invOf(b)),extra.join("；")]};
+      return {b, auto: auto.join("；"), feeHere: feeOwner[b.shoot]===b.id, due: renewDate && renewDate<=td && end>=td, expired: !!end && end<td,
+        cells:[b.product,b.actor,a.name,b.actor,b.role,b.mno||"",b.title,slash(b.date),b.start?slash(b.start):"OA未定",slash(end),lenLabel(b.length),renewDate?slash(renewDate)+"（"+b.renew+"天前）":"",(b.web||[]).join("、"),b.second,b.ai,b.ci,b.ce,b.nda||"",(feeOwner[b.shoot]===b.id?money(b.fee):"同場已計"),b.script||"",b.team||"",b.by||"",extra.join("；")]};
     });
 }
+function renderXScope(){
+  const sel=$("x-scope"), cur=sel.value||"all", mc=maxCycle();
+  let o='<option value="all">全部合約（不含取消）</option><option value="expired">合約已到期</option><option value="active">合約未到期</option><optgroup label="期數">';
+  for(let c=1;c<=mc;c++) o+='<option value="c'+c+'">第 '+c+' 期'+(c===cyc?'（目前）':'')+'</option>';
+  sel.innerHTML=o+'</optgroup>'; sel.value=[...sel.options].some(x=>x.value===cur)?cur:"all";
+}
 function renderExport(){
-  const rows=exportRows(); const canEdit = role!=="casting";
+  renderXScope();
+  const rows=exportRows(); const canEdit = role!=="casting"; const byProd = $("x-sort").value==="product";
   $("x-head").innerHTML = XCOLS.map(c=>'<th'+(c[2]?' class="red"':'')+'>'+esc(c[0]).replace("\n","<br>")+'</th>').join("");
-  $("x-hint").textContent = "共 "+rows.length+" 筆，依商品排序";
+  $("x-hint").textContent = "共 "+rows.length+" 筆"+(rows.some(r=>r.expired)?"・灰色＝合約已到期":"");
   let html="", i=0;
   while(i<rows.length){
-    let j=i; while(j<rows.length && rows[j].b.product===rows[i].b.product) j++;
+    let j=i+1; if(byProd) while(j<rows.length && rows[j].b.product===rows[i].b.product) j++;
     for(let k=i;k<j;k++){
       const r=rows[k], c=r.cells, a=actorById(r.b.actor);
       const col = a? COLORS[actors.indexOf(a)%COLORS.length] : "#888";
-      html+='<tr'+(r.due?' class="due"':'')+'>'+(k===i?'<td class="prod" rowspan="'+(j-i)+'">'+esc(c[0])+'</td>':'')+
+      html+='<tr'+(r.expired?' class="expired"':r.due?' class="due"':'')+'>'+(k===i?'<td class="prod" rowspan="'+(j-i)+'">'+esc(c[0])+'</td>':'')+
         c.slice(1).map((v,n)=>{ const idx=n+1;
           if(idx===X_PHOTO) return '<td>'+(a&&a.photo?'<span class="thumb" style="background:#ccc url(&quot;'+a.photo+'&quot;) center/cover"></span>':'<span class="thumb" style="background:'+col+'">'+esc(a?a.name.slice(-1):"")+'</span>')+'</td>';
           if(XHEAD[idx]==="腳本" && /^https?:\/\//.test(v)) return '<td><a href="'+esc(v)+'" target="_blank" rel="noopener">開啟</a></td>';
-          if(XHEAD[idx]==="發票日期"){ const inner='<span class="'+(r.b.inv?'own':'')+'">'+esc(v||(canEdit?"點擊設定":"—"))+'</span>';
-            return '<td class="inv">'+(canEdit?'<button type="button" class="x-cell" data-xinv="'+r.b.id+'">'+inner+'</button>':inner)+'</td>'; }
           if(XHEAD[idx]==="備考"){ const inner='<div class="meta">'+esc(r.auto)+'</div>'+(r.b.note?'<div class="x-note">'+esc(r.b.note)+'</div>':(canEdit?'<div class="oa-empty">點擊填寫備考</div>':''));
             return '<td class="rem">'+(canEdit?'<button type="button" class="x-cell" data-xnote="'+r.b.id+'">'+inner+'</button>':inner)+'</td>'; }
           return '<td>'+esc(v)+'</td>'; }).join("")+
@@ -258,6 +268,7 @@ $("m-next").onclick=()=>{ if(cyc<maxCycle()){cyc++;renderAll();} };
 $("l-status").onchange=renderRows;
 $("l-scope").onchange=renderRows;
 $("x-scope").onchange=renderExport;
+$("x-sort").onchange=renderExport;
 $("xrows").addEventListener("click",e=>{
   const who=()=>role==="casting"?"Casting":"大廣";
   const xi=e.target.closest("[data-xinv]");
@@ -437,7 +448,8 @@ $("dl-xlsx").addEventListener("click",async()=>{
     const xr=ws.getRow(r); xr.height=40;
     row.cells.forEach((v,i)=>{ const c=xr.getCell(i+2); c.value = (i===X_FEE && row.feeHere && row.b.fee!=="") ? Number(row.b.fee) : v;
       if(i===X_FEE) c.numFmt='"NT$"#,##0'; c.alignment={horizontal:"center",vertical:"middle",wrapText:true}; c.border=border;
-      if(row.due) c.fill={type:"pattern",pattern:"solid",fgColor:{argb:"FFFCE8CC"}}; });
+      if(row.expired){ c.fill={type:"pattern",pattern:"solid",fgColor:{argb:"FFEFEFEF"}}; c.font={color:{argb:"FF888888"}}; }
+      else if(row.due) c.fill={type:"pattern",pattern:"solid",fgColor:{argb:"FFFCE8CC"}}; });
     const next=rows[idx+1];
     if(!next || next.b.product!==row.b.product){ if(r>start) ws.mergeCells(start,2,r,2); start=r+1; }
     r++;
