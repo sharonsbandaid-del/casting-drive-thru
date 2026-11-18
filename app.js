@@ -183,6 +183,7 @@ function renderRows(){
       else if(sh.status==="已確認") act='<div class="acts"><button class="btn sm" data-shoot="'+sh.id+'" data-from="'+sh.status+'" data-to="已拍攝"'+(future?' disabled title="拍攝日當天之後才能標記"':'')+'>'+(future?'拍攝日後可標記':'標記已拍攝')+'</button><button class="btn sm ghost" data-shoot="'+sh.id+'" data-from="'+sh.status+'" data-to="待確認">退回待確認</button></div>';
       else if(sh.status==="已拍攝") act='<button class="btn sm ghost" data-shoot="'+sh.id+'" data-from="'+sh.status+'" data-to="已確認"'+(invoiced?' disabled title="本期已請款，需先撤銷請款"':'')+'>'+(invoiced?'已請款・鎖定':'撤銷已拍攝')+'</button>';
     } else if(sh.status==="已拍攝"){ act='<span class="meta">誤標請通知<br>三根木撤銷</span>'; }
+    else if(sh.active && (sh.status==="待確認"||sh.status==="已確認")) act='<a class="btn sm notify" href="'+esc(notifyMailto(sh))+'" data-notify="'+sh.id+'" title="開啟 email，寄給 Casting 敲通告">✉ 通知阿森</a>';
     const n=sh.live.length;
     const head='<tr class="shoot"><td class="num"><strong>'+esc(shootLabel(sh))+'</strong></td><td class="num">'+esc(sh.date)+'</td><td><strong>'+esc(a?a.name:sh.actor)+'</strong><div class="meta">'+esc(sh.actor)+'</div></td>'+
       '<td colspan="6">'+(sh.active ? '算 <strong>1 人次</strong>・共 '+n+' 支素材'+(n>1?'<span class="chip merge">合併拍攝</span>':'')+hoursBar(sh.hours) : '<span class="s-mute">已全部取消，不計人次</span>')+'</td>'+
@@ -334,6 +335,22 @@ $("pool").addEventListener("click",e=>{
   if(ed) openActor(ed.dataset.edit);
   if(bk){ bookActor(bk.dataset.book); return; }
 });
+/* 預約總表：寄信通知 Casting 敲通告 */
+function notifyMailto(sh){
+  const to=(window.CASTING_CONFIG||{}).CASTING_NOTIFY_EMAIL||"";
+  const a=actorById(sh.actor)||{name:sh.actor};
+  const live=sh.live.slice().sort((x,y)=>x.id.localeCompare(y.id));
+  const hrs=live.reduce((t,b)=>t+Number(b.hours||0),0);
+  const subj="【敲通告】"+a.name+"（"+sh.actor+"）"+slashW(sh.date)+(live.length>1?"・共"+live.length+"支":"・"+(live[0]?bkName(live[0]):""));
+  const lines=["阿森您好：","","麻煩協助敲以下通告，謝謝！","",
+    "演員："+a.name+"（"+sh.actor+"）",
+    "拍攝日："+slashW(sh.date),
+    "預估總時數："+hrs+" 小時"+(hrs>CAP?"（超過 "+CAP+" 小時，含超時）":""),
+    "素材數："+live.length+" 支"+(live.length>1?"（同日同場，算 1 人次）":""),""];
+  live.forEach((b,i)=>{ lines.push((i+1)+". "+bkName(b)+"｜"+b.product+"・"+b.team+"｜"+b.role+"｜"+(b.title||"")+"｜"+b.hours+" 小時"+(b.place?"｜地點："+b.place:"")); if(b.note) lines.push("   備考："+b.note); });
+  lines.push("","目前狀態："+sh.status,"登記人："+(live[0]&&live[0].by||myName()),"","平台連結："+location.origin+location.pathname);
+  return "mailto:"+encodeURIComponent(to)+"?subject="+encodeURIComponent(subj)+"&body="+encodeURIComponent(lines.join("\n"));
+}
 $("rows").addEventListener("click",e=>{
   const oa=e.target.closest("[data-oa]");
   if(oa){ const b=bookings.find(x=>x.id===oa.dataset.oa); const td=oa.parentElement;

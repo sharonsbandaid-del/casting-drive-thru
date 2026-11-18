@@ -2,5 +2,7 @@
    注意：secret / service_role key 絕對不要放在這裡。 */
 window.CASTING_CONFIG = {
   SUPABASE_URL: "https://obiiqtdbrifmwvskvpkx.supabase.co",
-  SUPABASE_KEY: "sb_publishable_ZA_2aKGf3nHFdUVvTS1ZvA_5U6sCUwv"
+  SUPABASE_KEY: "sb_publishable_ZA_2aKGf3nHFdUVvTS1ZvA_5U6sCUwv",
+  /* 預約總表「✉ 通知阿森」寄到這裡；要換人只要改這一行 */
+  CASTING_NOTIFY_EMAIL: "176331@gmail.com"
 };
