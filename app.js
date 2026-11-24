@@ -734,7 +734,7 @@ function showNotice(n){
   $("n-body").innerHTML='<div class="r-shop" id="n-title">'+esc(n.heading)+'</div><div class="r-sub">'+esc(n.sub)+'</div><div class="r-cut"></div>'+
     (n.urgent?'<div class="n-urgent">'+esc(n.urgent)+'</div>':'')+n.rows.map(r=>r==="cut"?'<div class="r-cut"></div>':r[0]==="#"?'<div class="r-lbl">'+esc(r.slice(1))+'</div>':row(r[0],r[1])).join("")+
     '<div class="r-cut"></div><div class="r-thanks">CASTING DRIVE-THRU</div>';
-  $("n-mail").href=mailto(n.to||MIA(),n.subject,n.text); $("n-mail").textContent="✉ 寄給"+(n.toName||"Mia"); $("n-msg").textContent="";
+  $("n-mail").href=mailto(n.to||MIA(),n.subject,n.text); $("n-mail").textContent="✉ 寄給"+(n.toName||"Mia"); $("n-mail").classList.toggle("hidden", n.noMail===true); $("n-msg").textContent="";
   $("notice").showModal();
 }
 function termsRows(b){ return [["肖像權期間",lenLabel(b.length)+"（依各素材 OA 日起算）"],["合約更新提醒","到期前 "+b.renew+" 天"],["WEB 平台",(b.web||[]).join("、")||"—"],["二次利用",b.second||"—"],["AI 修圖 / 影片生成",b.ai||"—"],["綁競品（成分 / 功效）",(b.ci||"—")+" / "+(b.ce||"—")],["保密合約",b.nda||"—"],["拍攝費",(money(b.fee)||"—")+" / 人次"],["超時費",(money(b.ot)||"—")+" / 小時"]]; }
@@ -764,7 +764,7 @@ function openCallSheet(sh){
   const a=actorById(sh.actor)||{name:sh.actor}; const live=sh.live.slice().sort((x,y)=>x.id.localeCompare(y.id));
   const okC=sh.cands.filter(lockOK), places=[...new Set(live.map(b=>b.place).filter(Boolean))].join("、")||"未填";
   const u=new URL(notifyMailto(sh));
-  showNotice({heading:"敲通告", sub:"請 Casting 確認檔期並在平台鎖定（寄給阿森）", urgent: okC.length?"":"候選日都不到 10 個工作天，保險可能來不及辦",
+  showNotice({heading:"敲通告", sub:"日期鎖定後，才會產生寄給 Mia 的通告單", noMail:true, urgent: okC.length?"":"候選日都不到 10 個工作天，保險可能來不及辦",
     to:(window.CASTING_CONFIG||{}).CASTING_NOTIFY_EMAIL||"", toName:"阿森",
     subject:u.searchParams.get("subject")||"", text:u.searchParams.get("body")||"", file:"敲通告_"+a.name+"_"+sh.cands[0],
     rows:[["演員",a.name+"（"+sh.actor+"）"],["候選日",sh.cands.map(shortW).join("、")],["請於",okC.length?shortW(lockBy(okC[0]))+" 前鎖定":"盡快"],["拍攝地點",places],["預估總時數",sh.hours+" 小時"],"cut","#拍攝內容（共 "+live.length+" 支）",
