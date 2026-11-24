@@ -420,12 +420,12 @@ function syncForm(src){
   $("b-renew-date").value = r ? slash(r) : "";
   $("b-renew-hint").textContent = $("b-start").value ? "合約至 "+slash(endOf($("b-start").value,t.length))+"，到期前 "+t.renew+" 天提醒" : "填入 OA 日後自動計算";
   const dates = formDates(), minD = minShootDate();
-  ["b-date","b-date2","b-date3"].forEach(id=>{ $(id).min = minD; });
+  ["b-date","b-date2","b-date3"].forEach(id=>{ $(id).min = isAdmin ? "" : minD; });
   $("b-date-hint").textContent = "最早可選 "+slashW(minD)+"（10 個工作天後，才來得及辦保險）。Casting 或大廣會從候選日中鎖定一天。";
   const ex = dates.length ? pendingGroup($("b-actor").value, dates) : null;
   const box=$("b-merge");
   const kl = dates.length && dates.every(d=>kocLock($("b-actor").value,$("b-product").value,$("b-role").value,d)) ? kocLock($("b-actor").value,$("b-product").value,$("b-role").value,dates[0]) : (dates.length?null:kocLock($("b-actor").value,$("b-product").value,$("b-role").value,fmt(today)));
-  const early = dates.find(d=>d<minD);
+  const early = !isAdmin && dates.find(d=>d<minD);
   const addH = Number($("b-hours").value), totH = (ex?ex.hours:0)+addH, over = totH>CAP;
   $("b-otok-wrap").classList.toggle("hidden",!over||!!kl);
   if(early){ box.className="msg err"; box.textContent="候選日 "+slash(early)+" 太早了：最早只能選 "+slashW(minD)+"（10 個工作天後）。"; }
@@ -451,7 +451,7 @@ $("book-form").addEventListener("submit",async e=>{
   const msg=(t,ok)=>{$("b-msg").innerHTML='<div class="msg '+(ok?"ok":"err")+'">'+esc(t)+'</div>';};
   const dates=formDates(), actor=$("b-actor").value, title=$("b-title").value.trim(), start=$("b-start").value;
   if(!dates.length||!actor||!title||!$("b-mno").value.trim()) return msg("請填寫演員、素材管理編號、素材篇名，並至少選 1 個拍攝日期。");
-  const minD=minShootDate(); const early=dates.find(d=>d<minD);
+  const minD=minShootDate(); const early=!isAdmin && dates.find(d=>d<minD);
   if(early) return msg("候選日 "+slash(early)+" 太早了：最早只能選 "+slash(minD)+"（10 個工作天後），才來得及辦保險。");
   const ex=pendingGroup(actor,dates);
   const cycle = ex ? shootCycle(ex) : openCycle();
@@ -698,7 +698,7 @@ function openResched(ids){
   $("rs-info").textContent=a.name+"（"+items[0].actor+"）・"+items.length+" 支素材："+items.map(b=>b.product+"「"+b.title+"」").join("、")
     +"　｜　目前："+(wasLocked?"🔒 "+slashW(items[0].date):"候選 "+items[0].cands.map(shortD).join("、"));
   const minD=minShootDate();
-  ["rs-d1","rs-d2","rs-d3"].forEach(id=>{ $(id).value=""; $(id).min=minD; });
+  ["rs-d1","rs-d2","rs-d3"].forEach(id=>{ $(id).value=""; $(id).min=isAdmin?"":minD; });
   $("rs-hint").textContent="最早可選 "+slashW(minD)+"。改期後會解除鎖定，需重新鎖定日期"+(wasLocked?"；送出後會提醒你通知 Mia 暫停辦理保險":"")+"。";
   $("rs-msg").innerHTML=""; $("rs-otok").checked=false; $("rs-otok-wrap").classList.add("hidden");
   $("rsdlg").showModal();
@@ -709,7 +709,7 @@ $("rs-ok").onclick=async()=>{
   const err=t=>{$("rs-msg").innerHTML='<div class="msg err">'+esc(t)+'</div>';};
   const dates=[...new Set(["rs-d1","rs-d2","rs-d3"].map(id=>$(id).value).filter(Boolean))].sort();
   if(!dates.length) return err("請至少選 1 個新的候選日。");
-  const minD=minShootDate(), early=dates.find(d=>d<minD); if(early) return err("候選日 "+slash(early)+" 太早了：最早只能選 "+slash(minD)+"（10 個工作天後）。");
+  const minD=minShootDate(), early=!isAdmin&&dates.find(d=>d<minD); if(early) return err("候選日 "+slash(early)+" 太早了：最早只能選 "+slash(minD)+"（10 個工作天後）。");
   const items=bookings.filter(b=>reschIds.includes(b.id)); const before=items.map(b=>({...b})); const wasLocked=items.some(b=>b.status==="已確認");
   const grp=pendingGroup(items[0].actor,dates,reschIds); const tot=items.reduce((t,b)=>t+Number(b.hours||0),0)+(grp?grp.hours:0);
   if(tot>CAP && !$("rs-otok").checked){ $("rs-otok-wrap").classList.remove("hidden"); return err("這場加總 "+tot+" 小時，超過上限 "+CAP+" 小時。請勾選已確認超時，或換其他日期。"); }
