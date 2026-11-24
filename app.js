@@ -429,6 +429,7 @@ function syncForm(src){
   const addH = Number($("b-hours").value), totH = (ex?ex.hours:0)+addH, over = totH>CAP;
   $("b-otok-wrap").classList.toggle("hidden",!over||!!kl);
   if(early){ box.className="msg err"; box.textContent="候選日 "+slash(early)+" 太早了：最早只能選 "+slashW(minD)+"（10 個工作天後）。"; }
+  else if(isAdmin && dates.find(d=>d<minD)){ box.className="msg err"; box.textContent="管理員可略過規則：候選日 "+slash(dates.find(d=>d<minD))+" 不到 10 個工作天，保險可能來不及辦，鎖定後通告單會標示【急件】。"; }
   else if(kl){ box.className="msg err"; box.innerHTML='這位演員已幫 <strong>'+esc(kl.product)+'</strong> 拍 KOC（'+esc(kl.title)+'，合約至 '+esc(slash(kocEnd(kl)))+'），不能再幫 '+esc($("b-product").value)+' 拍 KOC。可以改成情境演員，或換其他演員。'; }
   else if(ex){ box.className="msg "+(over?"err":"info"); box.innerHTML='這位演員已有相同候選日（'+esc(ex.cands.map(shortD).join("、"))+'）的待敲定拍攝 <strong>'+esc(ex.id)+'</strong>（第 '+shootCycle(ex)+' 期，已登記 '+ex.live.length+' 支：'+esc(ex.live.map(b=>b.product+"「"+b.title+"」"+b.hours+"h").join("、"))+'）。這筆會<strong>合併為同一拍攝人次，不另佔額度、不另計拍攝費</strong>。<br>加上這支共 <strong>'+totH+' / '+CAP+' 小時</strong>'+(over?'，超過當天上限 '+(totH-CAP)+' 小時。':'，還剩 '+(CAP-totH)+' 小時。'); }
   else if(dates.length){ const oc=openCycle(), k=cycleShoots(oc).length+1; box.className="msg plain"; box.textContent = (over?"單支就超過 "+CAP+" 小時上限。":"")+"這筆會先佔第 "+oc+" 期的第 "+k+" / 7 人次（待敲定）"+(k===QUOTA?"，排滿後本期即可請款":"")+"。鎖定日期時，如果那天這位演員已有拍攝，會自動合併成 1 人次並釋出這一點；當天上限 "+CAP+" 小時。"; }
