@@ -28,9 +28,11 @@ const cycBk = () => bookings.filter(b=>b.cycle===cyc);
 /* 拍攝人次：同一演員＋同一天＝1 人次，可包含多支素材 */
 function shootsIn(list){
   const m=new Map();
-  list.forEach(b=>{ const k=b.actor+"|"+b.date; if(!m.has(k)) m.set(k,{key:k,id:b.shoot,actor:b.actor,date:b.date,items:[]}); m.get(k).items.push(b); });
+  list.forEach(b=>{ const k=b.shoot; if(!m.has(k)) m.set(k,{key:k,id:b.shoot,actor:b.actor,date:b.date,items:[]}); m.get(k).items.push(b); });
   return [...m.values()].map(sh=>{ const live=sh.items.filter(counts); sh.live=live; sh.active=live.length>0;
+    sh.date=(live[0]||sh.items[0]).date; sh.cands=[...new Set((live.length?live:sh.items).flatMap(b=>b.cands||[b.date]))].sort();
     sh.status = !sh.active ? "已取消" : live.some(b=>b.status==="待確認") ? "待確認" : live.every(b=>b.status==="已拍攝") ? "已拍攝" : "已確認";
+    sh.locked = sh.status==="已確認"||sh.status==="已拍攝";
     sh.hours = live.reduce((t,b)=>t+Number(b.hours||0),0); sh.fee = (live[0]||sh.items[0]).fee; sh.ot = (live[0]||sh.items[0]).ot; return sh; }).sort((a,b)=>a.date.localeCompare(b.date)||a.id.localeCompare(b.id));
 }
 const CAP = 6;
@@ -54,6 +56,22 @@ const statusCls = {"待確認":"s-warn","已確認":"s-info","已拍攝":"s-ok",
 const toD = s => { const [y,m,d]=s.split("-").map(Number); return new Date(y,m-1,d); };
 const fmt = d => d.getFullYear()+"-"+pad(d.getMonth()+1)+"-"+pad(d.getDate());
 const slash = s => s ? s.replace(/-/g,"/") : "";
+/* 工作天（週末與國定假日不算）：候選日最早 10 個工作天後；鎖定日＝D1，拍攝日需在 D10 以後才來得及辦保險 */
+let offdays = new Set();
+const isWorkday = s => { const w=toD(s).getDay(); return w!==0 && w!==6 && !offdays.has(s); };
+function addWorkdays(s,n){ const d=toD(s); let k=0; while(k<n){ d.setDate(d.getDate()+1); if(isWorkday(fmt(d))) k++; } return fmt(d); }
+function subWorkdays(s,n){ const d=toD(s); let k=0; while(k<n){ d.setDate(d.getDate()-1); if(isWorkday(fmt(d))) k++; } return fmt(d); }
+function workdaysBetween(a,b){ if(b<=a) return 0; const d=toD(a); let n=0; while(fmt(d)<b){ d.setDate(d.getDate()+1); if(isWorkday(fmt(d))) n++; } return n; }
+const MIN_WD = 10, LOCK_WD = 9;
+const minShootDate = () => addWorkdays(fmt(today), MIN_WD);
+const lockOK = d => d >= addWorkdays(fmt(today), LOCK_WD);
+const lockBy = d => subWorkdays(d, LOCK_WD);
+const shortD = s => s ? s.slice(5).replace("-","/") : "";
+const shortW = s => s ? shortD(s)+"（"+"日一二三四五六"[toD(s).getDay()]+"）" : "";
+const stLabel = s => s==="待確認" ? "待敲定" : s;
+const lockedShootOn = (actor,date,exclude) => shootsIn(bookings.filter(b=>b.actor===actor&&b.date===date&&(b.status==="已確認"||b.status==="已拍攝")&&b.shoot!==exclude)).find(sh=>sh.active)||null;
+const pendingGroup = (actor,cands,excludeIds) => shootsIn(bookings.filter(b=>b.actor===actor&&b.status==="待確認"&&b.cands.join()===cands.join()&&!(excludeIds||[]).includes(b.id))).find(sh=>sh.active)||null;
+const shootById = id => shootsIn(bookings.filter(b=>b.shoot===id)).find(Boolean)||null;
 function endOf(start,months){ if(!start) return ""; const d=toD(start); const e=new Date(d.getFullYear(),d.getMonth()+Number(months),d.getDate()); e.setDate(e.getDate()-1); return fmt(e); }
 function renewOf(start,months,days){ const e=endOf(start,months); if(!e) return ""; const d=toD(e); d.setDate(d.getDate()-Number(days)); return fmt(d); }
 const lenLabel = n => Number(n)%12===0 ? (Number(n)/12)+"年" : n+"個月";
@@ -76,7 +94,7 @@ function renderQuota(){
     const tip = esc(sh.id+" "+sh.date+" "+(a?a.name:"")+"："+sh.live.map(b=>b.product+" "+b.title).join("、")+"・"+sh.hours+"/"+CAP+"h・"+sh.status);
     const rp = repeat?'<b class="rep">第'+(used.filter(x=>x.actor===sh.actor).indexOf(sh)+1)+'次</b>':'';
     if(sh.status==="已拍攝") return '<div class="slot used done" title="'+tip+'"><span class="st">已拍</span><span class="sd">'+esc(sh.date.slice(5).replace("-","/"))+'</span><span class="sn">'+esc(a?a.name:"")+'</span>'+rp+'</div>';
-    return '<div class="slot used" title="'+esc(sh.id+" "+sh.date+" "+(a?a.name:"")+"："+sh.live.map(b=>b.product+" "+b.title).join("、")+"・"+sh.hours+"/"+CAP+"h・"+sh.status)+'"><span class="d">'+esc(sh.date.slice(5).replace("-","/"))+'</span><span class="nm">'+esc(a?a.name:"")+'</span>'+(n>1?'<b class="x">×'+n+'支</b>':'')+(repeat?'<b class="rep">第'+(used.filter(x=>x.actor===sh.actor).indexOf(sh)+1)+'次</b>':'')+'</div>';
+    return '<div class="slot used" title="'+esc(sh.id+" "+sh.date+" "+(a?a.name:"")+"："+sh.live.map(b=>b.product+" "+b.title).join("、")+"・"+sh.hours+"/"+CAP+"h・"+sh.status)+'"><span class="d">'+(sh.status==="待確認"?'待敲定':esc(sh.date.slice(5).replace("-","/")))+'</span><span class="nm">'+esc(a?a.name:"")+'</span>'+(n>1?'<b class="x">×'+n+'支</b>':'')+(repeat?'<b class="rep">第'+(used.filter(x=>x.actor===sh.actor).indexOf(sh)+1)+'次</b>':'')+'</div>';
   }).join("");
   let act='';
   if(role==="casting"){
@@ -141,7 +159,10 @@ async function setShootStatus(shootId,to,from){
     toast("已改為「"+to+"」", from ? async()=>{ if(await call("set_shoot_status",{p_shoot:shootId,p_to:from})) toast("已復原",null); } : null);
 }
 async function setCancelled(id,cancel){
-  if(await call("set_booking_cancelled",{p_id:id,p_cancel:cancel}))
+  const b0=bookings.find(x=>x.id===id); const wasLocked = cancel && b0 && b0.status==="已確認" ? {...b0} : null;
+  const ok = await call("set_booking_cancelled",{p_id:id,p_cancel:cancel});
+  if(ok && wasLocked && role!=="casting") showCancelNotice(wasLocked);
+  if(ok)
     toast(cancel?"已取消這支素材":"已恢復這支素材", async()=>{ if(await call("set_booking_cancelled",{p_id:id,p_cancel:!cancel})) toast("已復原",null); });
 }
 let toastTimer=null;
@@ -173,27 +194,34 @@ function renderRows(){
   const srcAll = ($("l-scope").value==="all" ? bookings : cycBk());
   if(st==="已刪除"){ renderDeleted(srcAll.filter(b=>b.status==="已刪除")); return; }
   const shoots = shootsIn(srcAll.filter(b=>b.status!=="已刪除")).filter(sh=>!st||sh.status===st||sh.items.some(b=>b.status===st));
-  $("l-hint").textContent = role==="casting" ? "Casting 身分：以拍攝人次為單位確認檔期、標記已拍攝" : "大廣身分：可逐支取消素材；同場素材全部取消才會釋出人次";
+  $("l-hint").textContent = role==="casting" ? "Casting 身分：從候選日中鎖定拍攝日、標記已拍攝" : "大廣身分：從候選日鎖定日期後，可寄通告單給 Mia；同場素材全部取消才會釋出人次";
   $("rows").innerHTML = shoots.map(sh=>{
     const a = actorById(sh.actor); let act="";
+    const canLock = sh.active && sh.status==="待確認";
+    const btnLock = canLock ? '<button class="btn sm primary" data-lock="'+sh.id+'">🔒 鎖定日期</button>' : '';
     if(role==="casting"){
       const future = sh.date > fmt(today);
       const invoiced = isInvoiced(shootCycle(sh));
-      if(sh.status==="待確認") act='<button class="btn sm" data-shoot="'+sh.id+'" data-from="'+sh.status+'" data-to="已確認">確認檔期</button>';
-      else if(sh.status==="已確認") act='<div class="acts"><button class="btn sm" data-shoot="'+sh.id+'" data-from="'+sh.status+'" data-to="已拍攝"'+(future?' disabled title="拍攝日當天之後才能標記"':'')+'>'+(future?'拍攝日後可標記':'標記已拍攝')+'</button><button class="btn sm ghost" data-shoot="'+sh.id+'" data-from="'+sh.status+'" data-to="待確認">退回待確認</button></div>';
+      if(canLock) act=btnLock;
+      else if(sh.status==="已確認") act='<div class="acts"><button class="btn sm" data-shoot="'+sh.id+'" data-from="'+sh.status+'" data-to="已拍攝"'+(future?' disabled title="拍攝日當天之後才能標記"':'')+'>'+(future?'拍攝日後可標記':'標記已拍攝')+'</button><button class="btn sm ghost" data-shoot="'+sh.id+'" data-from="'+sh.status+'" data-to="待確認">解除鎖定</button></div>';
       else if(sh.status==="已拍攝") act='<button class="btn sm ghost" data-shoot="'+sh.id+'" data-from="'+sh.status+'" data-to="已確認"'+(invoiced?' disabled title="本期已請款，需先撤銷請款"':'')+'>'+(invoiced?'已請款・鎖定':'撤銷已拍攝')+'</button>';
-    } else if(sh.status==="已拍攝"){ act='<span class="meta">誤標請通知<br>三根木撤銷</span>'; }
-    else if(sh.active && (sh.status==="待確認"||sh.status==="已確認")) act='<a class="btn sm notify" href="'+esc(notifyMailto(sh))+'" data-notify="'+sh.id+'" title="開啟 email，寄給 Casting 敲通告">✉ 通知阿森</a>';
+    } else if(sh.status==="已拍攝"){ act='<div class="acts"><button class="btn sm ghost" data-notice="'+sh.id+'">📋 通告單</button></div><span class="meta">誤標請通知三根木撤銷</span>'; }
+    else if(canLock) act='<div class="acts">'+btnLock+'<a class="btn sm notify" href="'+esc(notifyMailto(sh))+'" data-notify="'+sh.id+'" title="開啟 email，請 Casting 確認檔期">✉ 通知阿森</a><button class="btn sm ghost" data-resched="'+sh.id+'">改期</button></div>';
+    else if(sh.status==="已確認") act='<div class="acts"><button class="btn sm" data-notice="'+sh.id+'">📋 通告單</button><button class="btn sm ghost" data-resched="'+sh.id+'">改期</button></div>';
+    const dateCell = !sh.active ? esc(sh.date)
+      : sh.locked ? '<span class="lockd">🔒 '+esc(slash(sh.date))+'</span>'+((sh.live[0]||{}).lockedBy?'<div class="meta">'+esc(sh.live[0].lockedBy)+' 鎖定</div>':'')
+      : '<div class="cand-list">'+sh.cands.map(d=>'<span class="cand'+(lockOK(d)?'':' late')+'" title="'+(lockOK(d)?'':'來不及辦保險')+'">'+esc(shortW(d))+'</span>').join("")+'</div>'
+        + (sh.cands.some(lockOK) ? '<div class="meta">請於 '+esc(shortD(lockBy(sh.cands.find(lockOK))))+' 前鎖定</div>' : '<div class="meta s-bad">候選日都來不及辦保險</div>');
     const n=sh.live.length;
-    const head='<tr class="shoot"><td class="num"><strong>'+esc(shootLabel(sh))+'</strong></td><td class="num">'+esc(sh.date)+'</td><td><strong>'+esc(a?a.name:sh.actor)+'</strong><div class="meta">'+esc(sh.actor)+'</div></td>'+
+    const head='<tr class="shoot"><td class="num"><strong>'+esc(shootLabel(sh))+'</strong></td><td class="num">'+dateCell+'</td><td><strong>'+esc(a?a.name:sh.actor)+'</strong><div class="meta">'+esc(sh.actor)+'</div></td>'+
       '<td colspan="6">'+(sh.active ? '算 <strong>1 人次</strong>・共 '+n+' 支素材'+(n>1?'<span class="chip merge">合併拍攝</span>':'')+hoursBar(sh.hours) : '<span class="s-mute">已全部取消，不計人次</span>')+'</td>'+
-      '<td><span class="pill '+statusCls[sh.status]+'">'+esc(sh.status)+'</span></td><td>'+act+'</td></tr>';
+      '<td><span class="pill '+statusCls[sh.status]+'">'+esc(stLabel(sh.status))+'</span></td><td>'+act+'</td></tr>';
     const items=sh.items.map(b=>{
       const view = '<button class="btn sm ghost" data-view="'+b.id+'">檢視</button>'+(role!=="casting"&&counts(b)?'<button class="btn sm" data-edit-bk="'+b.id+'">編輯</button>':'');
       const c = view + (role==="casting" ? '' : (b.status==="待確認"||b.status==="已確認") ? '<button class="btn sm" data-act="已取消" data-id="'+b.id+'">取消此素材</button>'
         : b.status==="已取消" ? '<button class="btn sm ghost" data-act="待確認" data-id="'+b.id+'">恢復此素材</button>' : '')
         + (role!=="casting" && b.status!=="已拍攝" && !isInvoiced(b.cycle) ? '<button class="btn sm danger" data-del="'+b.id+'">刪除</button>' : '');
-      return '<tr class="item'+(counts(b)?'':' gone')+'"><td class="mno">'+(b.mno?esc(b.mno):'<span class="meta">未填</span>')+'</td><td></td><td></td><td><strong>'+esc(b.product)+'</strong><div class="meta">'+esc(b.team)+'</div></td><td>'+(b.role==="KOC"?'<span class="chip koc">KOC</span>':esc(b.role))+'</td><td>'+esc(b.title)+(b.note?'<div class="meta">'+esc(b.note)+'</div>':'')+'</td><td class="num">'+oaCell(b)+'</td><td class="num">'+esc(b.hours)+' 小時</td><td>'+esc(b.by)+'</td><td><span class="pill '+statusCls[b.status]+'" title="'+esc(histText(b))+'">'+esc(b.status)+'</span>'+((b.log||[]).length?'<div class="meta">已變更 '+b.log.length+' 次</div>':'')+'</td><td>'+c+'</td></tr>';
+      return '<tr class="item'+(counts(b)?'':' gone')+'"><td class="mno">'+(b.mno?esc(b.mno):'<span class="meta">未填</span>')+'</td><td></td><td></td><td><strong>'+esc(b.product)+'</strong><div class="meta">'+esc(b.team)+'</div></td><td>'+(b.role==="KOC"?'<span class="chip koc">KOC</span>':esc(b.role))+'</td><td>'+esc(b.title)+(b.note?'<div class="meta">'+esc(b.note)+'</div>':'')+'</td><td class="num">'+oaCell(b)+'</td><td class="num">'+esc(b.hours)+' 小時</td><td>'+esc(b.by)+'</td><td><span class="pill '+statusCls[b.status]+'" title="'+esc(histText(b))+'">'+esc(stLabel(b.status))+'</span>'+((b.log||[]).length?'<div class="meta">已變更 '+b.log.length+' 次</div>':'')+'</td><td>'+c+'</td></tr>';
     }).join("");
     return head+items;
   }).join("") || '<tr><td colspan="11" class="note">第 '+cyc+' 期尚無預約。</td></tr>';
@@ -295,7 +323,7 @@ $("xrows").addEventListener("click",e=>{
   if(e.target.closest("[data-x-cancel]")){ renderExport(); return; }
 });
 
-function bookActor(id){ setTab("book"); $("b-actor").value=id; if(!$("b-date").value){ const d=new Date(today); d.setDate(d.getDate()+7); $("b-date").value=fmt(d); } syncForm("date"); $("b-title").focus(); }
+function bookActor(id){ setTab("book"); $("b-actor").value=id; if(!$("b-date").value){ $("b-date").value = minShootDate(); } syncForm("date"); $("b-title").focus(); }
 /* MENU：演員細節 */
 function openActorView(id){
   const a=actorById(id); if(!a) return; const t=a.terms||{};
@@ -341,10 +369,11 @@ function notifyMailto(sh){
   const a=actorById(sh.actor)||{name:sh.actor};
   const live=sh.live.slice().sort((x,y)=>x.id.localeCompare(y.id));
   const hrs=live.reduce((t,b)=>t+Number(b.hours||0),0);
-  const subj="【敲通告】"+a.name+"（"+sh.actor+"）"+slashW(sh.date)+(live.length>1?"・共"+live.length+"支":"・"+(live[0]?bkName(live[0]):""));
-  const lines=["阿森您好：","","麻煩協助敲以下通告，謝謝！","",
+  const subj="【敲通告】"+a.name+"（"+sh.actor+"）候選 "+sh.cands.map(shortD).join("、")+(live.length>1?"・共"+live.length+"支":"・"+(live[0]?bkName(live[0]):""));
+  const okC=sh.cands.filter(lockOK);
+  const lines=["阿森您好：","","麻煩協助確認以下通告的檔期，並在平台上從候選日中鎖定一天，謝謝！"+(okC.length?"（請於 "+slashW(lockBy(okC[0]))+" 前鎖定，才來得及辦保險）":""),"",
     "演員："+a.name+"（"+sh.actor+"）",
-    "拍攝日："+slashW(sh.date),
+    "候選日："+sh.cands.map(slashW).join("、"),
     "預估總時數："+hrs+" 小時"+(hrs>CAP?"（超過 "+CAP+" 小時，含超時）":""),
     "素材數："+live.length+" 支"+(live.length>1?"（同日同場，算 1 人次）":""),""];
   live.forEach((b,i)=>{ lines.push((i+1)+". "+bkName(b)+"｜"+b.product+"・"+b.team+"｜"+b.role+"｜"+(b.title||"")+"｜"+b.hours+" 小時"+(b.place?"｜地點："+b.place:"")); if(b.note) lines.push("   備考："+b.note); });
@@ -366,10 +395,13 @@ $("rows").addEventListener("click",e=>{
   const eb=e.target.closest("[data-edit-bk]"); if(eb){ openEditBk(eb.dataset.editBk); return; }
   const sb=e.target.closest("[data-shoot]");
   if(sb){ setShootStatus(sb.dataset.shoot, sb.dataset.to, sb.dataset.from); return; }
+  const lk=e.target.closest("[data-lock]"); if(lk){ openLock(lk.dataset.lock); return; }
+  const rs=e.target.closest("[data-resched]"); if(rs){ const sh=shootById(rs.dataset.resched); if(sh) openResched(sh.live.map(b=>b.id)); return; }
+  const nt=e.target.closest("[data-notice]"); if(nt){ openNotice(nt.dataset.notice); return; }
   const btn=e.target.closest("[data-act]"); if(!btn) return;
   const b=bookings.find(x=>x.id===btn.dataset.id);
   if(btn.dataset.act==="待確認"){ /* 恢復：先在畫面上檢查，資料庫也會再檢查一次 */
-    const sh=activeShoots(b.date).find(x=>x.actor===b.actor);
+    const sh = b.lockedAt ? (lockedShootOn(b.actor,b.date)||pendingGroup(b.actor,b.cands)) : pendingGroup(b.actor,b.cands);
     const kl=kocLock(b.actor,b.product,b.role,b.date,b.id); if(kl) return toast("這位演員已綁 "+kl.product+" 的 KOC，無法恢復這支 KOC。",null);
     if((sh?sh.hours:0)+Number(b.hours||0)>CAP) return toast("恢復後這場會超過 "+CAP+" 小時，請先和 Casting 確認。",null);
   }
@@ -387,19 +419,27 @@ function syncForm(src){
   const r = renewOf($("b-start").value,t.length,t.renew);
   $("b-renew-date").value = r ? slash(r) : "";
   $("b-renew-hint").textContent = $("b-start").value ? "合約至 "+slash(endOf($("b-start").value,t.length))+"，到期前 "+t.renew+" 天提醒" : "填入 OA 日後自動計算";
-  const ex = activeShoots($("b-date").value||"none").find(sh=>sh.actor===$("b-actor").value);
+  const dates = formDates(), minD = minShootDate();
+  ["b-date","b-date2","b-date3"].forEach(id=>{ $(id).min = isAdmin ? "" : minD; });
+  $("b-date-hint").textContent = "最早可選 "+slashW(minD)+"（10 個工作天後，才來得及辦保險）。Casting 或大廣會從候選日中鎖定一天。";
+  const ex = dates.length ? pendingGroup($("b-actor").value, dates) : null;
   const box=$("b-merge");
-  const kl = kocLock($("b-actor").value,$("b-product").value,$("b-role").value,$("b-date").value||fmt(today));
+  const kl = dates.length && dates.every(d=>kocLock($("b-actor").value,$("b-product").value,$("b-role").value,d)) ? kocLock($("b-actor").value,$("b-product").value,$("b-role").value,dates[0]) : (dates.length?null:kocLock($("b-actor").value,$("b-product").value,$("b-role").value,fmt(today)));
+  const early = !isAdmin && dates.find(d=>d<minD);
   const addH = Number($("b-hours").value), totH = (ex?ex.hours:0)+addH, over = totH>CAP;
   $("b-otok-wrap").classList.toggle("hidden",!over||!!kl);
-  if(kl){ box.className="msg err"; box.innerHTML='這位演員已幫 <strong>'+esc(kl.product)+'</strong> 拍 KOC（'+esc(kl.title)+'，合約至 '+esc(slash(kocEnd(kl)))+'），不能再幫 '+esc($("b-product").value)+' 拍 KOC。可以改成情境演員，或換其他演員。'; }
-  else if(ex){ box.className="msg "+(over?"err":"info"); box.innerHTML='這位演員在 '+esc(slash(ex.date))+' 已有拍攝 <strong>'+esc(ex.id)+'</strong>（第 '+shootCycle(ex)+' 期，已登記 '+ex.live.length+' 支：'+esc(ex.live.map(b=>b.product+"「"+b.title+"」"+b.hours+"h").join("、"))+'）。這筆會<strong>合併為同一拍攝人次，不另佔額度、不另計拍攝費</strong>。<br>加上這支共 <strong>'+totH+' / '+CAP+' 小時</strong>'+(over?'，超過當天上限 '+(totH-CAP)+' 小時。':'，還剩 '+(CAP-totH)+' 小時。'); }
-  else if($("b-date").value){ const oc=openCycle(), k=cycleShoots(oc).length+1; box.className="msg plain"; box.textContent = (over?"單支就超過 "+CAP+" 小時上限。":"")+"這筆會新增 1 個拍攝人次，排入第 "+oc+" 期的第 "+k+" / 7 人次"+(k===QUOTA?"（排滿後本期即可請款）":"")+"。同一演員同一天的其他素材會自動合併，當天上限 "+CAP+" 小時。"; }
+  if(early){ box.className="msg err"; box.textContent="候選日 "+slash(early)+" 太早了：最早只能選 "+slashW(minD)+"（10 個工作天後）。"; }
+  else if(kl){ box.className="msg err"; box.innerHTML='這位演員已幫 <strong>'+esc(kl.product)+'</strong> 拍 KOC（'+esc(kl.title)+'，合約至 '+esc(slash(kocEnd(kl)))+'），不能再幫 '+esc($("b-product").value)+' 拍 KOC。可以改成情境演員，或換其他演員。'; }
+  else if(ex){ box.className="msg "+(over?"err":"info"); box.innerHTML='這位演員已有相同候選日（'+esc(ex.cands.map(shortD).join("、"))+'）的待敲定拍攝 <strong>'+esc(ex.id)+'</strong>（第 '+shootCycle(ex)+' 期，已登記 '+ex.live.length+' 支：'+esc(ex.live.map(b=>b.product+"「"+b.title+"」"+b.hours+"h").join("、"))+'）。這筆會<strong>合併為同一拍攝人次，不另佔額度、不另計拍攝費</strong>。<br>加上這支共 <strong>'+totH+' / '+CAP+' 小時</strong>'+(over?'，超過當天上限 '+(totH-CAP)+' 小時。':'，還剩 '+(CAP-totH)+' 小時。'); }
+  else if(dates.length){ const oc=openCycle(), k=cycleShoots(oc).length+1; box.className="msg plain"; box.textContent = (over?"單支就超過 "+CAP+" 小時上限。":"")+"這筆會先佔第 "+oc+" 期的第 "+k+" / 7 人次（待敲定）"+(k===QUOTA?"，排滿後本期即可請款":"")+"。鎖定日期時，如果那天這位演員已有拍攝，會自動合併成 1 人次並釋出這一點；當天上限 "+CAP+" 小時。"; }
   else { box.className="hidden"; }
 }
 $("b-product").addEventListener("change",()=>{firstTouched=false;syncForm("product");});
 $("b-actor").addEventListener("change",()=>{firstTouched=false;syncForm();});
 $("b-date").addEventListener("change",()=>syncForm("date"));
+$("b-date2").addEventListener("change",()=>syncForm("date"));
+$("b-date3").addEventListener("change",()=>syncForm("date"));
+function formDates(){ return [...new Set(["b-date","b-date2","b-date3"].map(id=>$(id).value).filter(Boolean))].sort(); }
 $("b-hours").addEventListener("change",()=>syncForm());
 $("b-role").addEventListener("change",()=>syncForm());
 $("b-start").addEventListener("change",()=>syncForm());
@@ -409,27 +449,28 @@ $("b-title").addEventListener("input",()=>syncForm());
 $("book-form").addEventListener("submit",async e=>{
   e.preventDefault();
   const msg=(t,ok)=>{$("b-msg").innerHTML='<div class="msg '+(ok?"ok":"err")+'">'+esc(t)+'</div>';};
-  const date=$("b-date").value, actor=$("b-actor").value, title=$("b-title").value.trim(), start=$("b-start").value;
-  if(!date||!actor||!title||!$("b-mno").value.trim()) return msg("請填寫演員、素材管理編號、素材篇名與拍攝日期。");
-  const mkey=date.slice(0,7);
-  const ex=activeShoots(date).find(sh=>sh.actor===actor);
+  const dates=formDates(), actor=$("b-actor").value, title=$("b-title").value.trim(), start=$("b-start").value;
+  if(!dates.length||!actor||!title||!$("b-mno").value.trim()) return msg("請填寫演員、素材管理編號、素材篇名，並至少選 1 個拍攝日期。");
+  const minD=minShootDate(); const early=!isAdmin && dates.find(d=>d<minD);
+  if(early) return msg("候選日 "+slash(early)+" 太早了：最早只能選 "+slash(minD)+"（10 個工作天後），才來得及辦保險。");
+  const ex=pendingGroup(actor,dates);
   const cycle = ex ? shootCycle(ex) : openCycle();
-  const kl = kocLock(actor,$("b-product").value,$("b-role").value,date);
+  const kl = dates.every(d=>kocLock(actor,$("b-product").value,$("b-role").value,d)) ? kocLock(actor,$("b-product").value,$("b-role").value,dates[0]) : null;
   if(kl) return msg("這位演員已幫 "+kl.product+" 拍 KOC（合約至 "+slash(kocEnd(kl))+"），不能再幫 "+$("b-product").value+" 拍 KOC。請改成情境演員，或換其他演員。");
   const totH=(ex?ex.hours:0)+Number($("b-hours").value);
-  if(totH>CAP && !$("b-otok").checked) return msg("這場加總 "+totH+" 小時，超過當天上限 "+CAP+" 小時。請縮短時數、改其他日期，或勾選「已和 Casting 公司確認超時」。");
+  if(totH>CAP && !$("b-otok").checked) return msg("這場加總 "+totH+" 小時，超過當天上限 "+CAP+" 小時。請縮短時數，或勾選「已和 Casting 公司確認超時」。");
   if(ex && ex.live.some(b=>b.product===$("b-product").value&&b.title===title)) return msg("同一場拍攝已登記過「"+title+"」，請確認是否重複。");
   const btnS=e.submitter||$("book-form").querySelector("button[type=submit]"); btnS.disabled=true;
-  const res = await call("create_booking",{p_actor:actor,p_date:date,p_hours:Number($("b-hours").value),p_product:$("b-product").value,p_team:$("b-team").value,
+  const res = await call("create_booking",{p_actor:actor,p_dates:dates,p_hours:Number($("b-hours").value),p_product:$("b-product").value,p_team:$("b-team").value,
     p_role:$("b-role").value,p_material_no:$("b-mno").value.trim(),p_title:title,p_place:$("b-place").value.trim()||null,p_start:start||null,
     p_script:$("b-script").value.trim()||null,p_note:$("b-note").value.trim()||null,p_overtime_ok:$("b-otok").checked},{quiet:true});
   btnS.disabled=false;
   if(res.error) return msg(res.error);
   const nb = bookings.find(x=>x.id===res.data.id) || res.data;
   const nc = nb.cycle||cycle; cyc=nc; renderAll(); const left=QUOTA-cycleShoots(nc).length;
-  msg(ex ? "已送出 "+$("b-mno").value.trim()+"，併入同一天的拍攝（共 "+(ex.live.length+1)+" 支素材、"+totH+" 小時，算 1 人次，不另計拍攝費）。Casting 公司需重新確認這場的時數。第 "+nc+" 期剩餘 "+left+" 人次。"
-         : "已送出 "+$("b-mno").value.trim()+"（第 "+nc+" 期），等待 Casting 公司確認檔期。"+(left>0?"本期剩餘 "+left+" 人次。":"本期 7 人次已排滿，全數拍攝完成後 Casting 即可請款。"),true);
-  openReceipt(nb, ex, nc);
+  msg(ex ? "已送出 "+$("b-mno").value.trim()+"，和相同候選日的預約併為同一場（共 "+(ex.live.length+1)+" 支素材、"+totH+" 小時，算 1 人次）。等待鎖定日期。第 "+nc+" 期剩餘 "+left+" 人次。"
+         : "已送出 "+$("b-mno").value.trim()+"（第 "+nc+" 期），候選日 "+dates.map(shortW).join("、")+"，等待鎖定日期。"+(left>0?"本期剩餘 "+left+" 人次。":"本期 7 人次已排滿，全數拍攝完成後 Casting 即可請款。"),true);
+  openReceipt(nb, !!ex, nc);
   $("b-title").value=""; $("b-mno").value=""; $("b-script").value=""; $("b-note").value=""; $("b-otok").checked=false; $("b-start").value=""; syncForm();
 });
 
@@ -491,11 +532,11 @@ let receiptBk=null;
 function openReceipt(b, ex, cycle){
   receiptBk=b; const info=receiptInfo(b); const a=info.a;
   const point = (ex!==undefined && cycle!==undefined) ? (ex?"併入同場，不另計點":"第 "+cycle+" 期 第 "+(cycleShoots(cycle).findIndex(sh=>sh.id===b.shoot)+1)+" / 7 點") : info.point;
-  const st = b.status==="待確認"||!b.status ? "待 Casting 確認檔期" : b.status;
+  const st = b.status==="待確認"||!b.status ? "待鎖定拍攝日期" : b.status;
   const row=(l,v)=>'<div class="r-row"><span>'+esc(l)+'</span><span>'+esc(v)+'</span></div>';
   $("r-body").innerHTML='<div class="r-shop" id="r-title">Casting Drive-Thru</div><div class="r-sub">演員預約平台・點餐單</div><div class="r-cut"></div>'+
     '<div class="r-lbl">素材管理編號</div><div class="r-no">'+esc(bkName(b))+'</div><div class="r-cut"></div>'+
-    row("演員",a.name+"（"+b.actor+"）")+row("商品",b.product+"・"+b.team)+row("拍攝需求",b.role)+row("素材",b.title)+row("拍攝日",slashW(b.date))+row("預估時數",b.hours+" 小時")+(b.place?row("拍攝地點",b.place):"")+
+    row("演員",a.name+"（"+b.actor+"）")+row("商品",b.product+"・"+b.team)+row("拍攝需求",b.role)+row("素材",b.title)+(b.status==="待確認"||!b.status ? row("候選日",(b.cands||[b.date]).map(shortW).join("、")) : row("拍攝日","🔒 "+slashW(b.date)))+row("預估時數",b.hours+" 小時")+(b.place?row("拍攝地點",b.place):"")+
     '<div class="r-cut"></div>'+row("集點",point)+row("登記人",b.by||myName())+
     '<div class="r-cut"></div><div class="r-status">狀態：'+esc(st)+'</div><div class="r-bar" aria-hidden="true"></div><div class="r-thanks">THANK YOU ・ 請等候叫號</div>';
   $("r-msg").textContent="";
@@ -503,14 +544,14 @@ function openReceipt(b, ex, cycle){
 }
 function receiptText(b){
   const info=receiptInfo(b); const a=info.a;
-  const st = b.status==="待確認"||!b.status ? "待 Casting 確認檔期" : b.status;
+  const st = b.status==="待確認"||!b.status ? "待鎖定拍攝日期" : b.status;
   return ["【Casting Drive-Thru 預約】",
     "素材管理編號："+bkName(b),
     "演員："+a.name+"（"+b.actor+"）",
     "商品："+b.product+"・"+b.team,
     "拍攝需求："+b.role,
     "素材："+b.title,
-    "拍攝日："+slashW(b.date),
+    (b.status==="待確認"||!b.status ? "候選日："+(b.cands||[b.date]).map(slashW).join("、") : "拍攝日（已鎖定）："+slashW(b.date)),
     "預估時數："+b.hours+" 小時",
     b.place?"拍攝地點："+b.place:null,
     "集點："+info.point,
@@ -526,24 +567,25 @@ let h2cP=null;
 function loadH2C(){ if(window.html2canvas) return Promise.resolve(); if(h2cP) return h2cP;
   h2cP=new Promise((res,rej)=>{ const sc=document.createElement("script"); sc.src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"; sc.onload=res; sc.onerror=()=>{ h2cP=null; rej(new Error("load")); }; document.head.appendChild(sc); });
   return h2cP; }
-async function saveReceiptImage(){
-  const b=receiptBk; if(!b) return; const msg=$("r-msg"); msg.textContent="產生圖片中…";
+async function saveNodeImage(el, name, msg){
+  msg.textContent="產生圖片中…";
   try{
     await loadH2C();
-    const el=$("r-body"); el.classList.add("r-snap");
+    el.classList.add("r-snap");
     const canvas=await window.html2canvas(el,{scale:2,backgroundColor:"#fffdf7",useCORS:true});
     el.classList.remove("r-snap");
-    const name=(bkName(b)+"_"+((actorById(b.actor)||{}).name||b.actor)).replace(/[\\/:*?"<>|\s]+/g,"_")+".png";
+    name=name.replace(/[\\/:*?"<>|\s]+/g,"_")+".png";
     const blob=await new Promise(r=>canvas.toBlob(r,"image/png"));
     const file=new File([blob],name,{type:"image/png"});
     if(navigator.canShare && navigator.canShare({files:[file]}) && /Mobi|Android|iPhone|iPad/.test(navigator.userAgent)){
-      try{ await navigator.share({files:[file],title:bkName(b)}); msg.textContent=""; return; }catch(e){ if(e&&e.name==="AbortError"){ msg.textContent=""; return; } }
+      try{ await navigator.share({files:[file],title:name}); msg.textContent=""; return; }catch(e){ if(e&&e.name==="AbortError"){ msg.textContent=""; return; } }
     }
     const url=URL.createObjectURL(blob); const link=document.createElement("a"); link.href=url; link.download=name; document.body.appendChild(link); link.click(); link.remove();
     setTimeout(()=>URL.revokeObjectURL(url),2000);
-    msg.textContent="已下載圖片：「"+name+"」，可以直接拖進 LINE 傳送";
-  }catch(e){ $("r-body").classList.remove("r-snap"); msg.textContent="圖片產生失敗，請改用「複製文字」或截圖"; }
+    msg.textContent="已下載圖片：「"+name+"」";
+  }catch(e){ el.classList.remove("r-snap"); msg.textContent="圖片產生失敗，請改用「複製文字」或截圖"; }
 }
+async function saveReceiptImage(){ const b=receiptBk; if(!b) return; await saveNodeImage($("r-body"), bkName(b)+"_"+((actorById(b.actor)||{}).name||b.actor), $("r-msg")); }
 $("r-img").onclick=saveReceiptImage;
 $("r-copy").onclick=async()=>{ if(!receiptBk) return; $("r-msg").textContent = await copyText(receiptText(receiptBk)) ? "已複製，到 LINE 貼上就可以了" : "複製失敗，請手動選取文字"; };
 /* 預約總表：內容檢視 */
@@ -555,7 +597,7 @@ function openDetail(id){
   const sec=(t,rows)=>'<section class="d-sec"><h4>'+esc(t)+'</h4><dl>'+rows.filter(r=>r).map(r=>'<div><dt>'+esc(r[0])+'</dt><dd>'+(r[2]?r[1]:esc(r[1]||"—"))+'</dd></div>').join("")+'</dl></section>';
   $("d-title").innerHTML=esc(bkName(b))+' <span class="pill '+statusCls[b.status]+'">'+esc(b.status)+'</span>';
   $("d-body").innerHTML=
-    sec("拍攝資訊",[["演員",a.name+"（"+b.actor+"）"],["商品",b.product],["素材管理編號",b.mno],["素材篇名",b.title],["拍攝需求",b.role],["拍攝日期",slash(b.date)],["預估時數",b.hours+" 小時"],["拍攝地點",b.place],["負責組別",b.team],["登記人",b.by]])+
+    sec("拍攝資訊",[["演員",a.name+"（"+b.actor+"）"],["商品",b.product],["素材管理編號",b.mno],["素材篇名",b.title],["拍攝需求",b.role],[b.status==="待確認"?"候選日期":"拍攝日期", b.status==="待確認" ? (b.cands||[b.date]).map(slash).join("、") : "🔒 "+slash(b.date)],["預估時數",b.hours+" 小時"],["拍攝地點",b.place],["負責組別",b.team],["登記人",b.by]])+
     sec("同場與集點",[["同場素材",sib.length+" 支・共 "+hrs+" / "+CAP+" 小時"],["請款期數","第 "+b.cycle+" 期"+((cycleInv||{})[b.cycle]?"（"+slash(cycleInv[b.cycle])+" 已請款）":"")]])+
     sec("合約與肖像授權",[["本素材合約開始日（OA）",b.start?slash(b.start):"未定"],["合約至",b.start?slash(end)+"（"+lenLabel(b.length)+"）":"填入 OA 日後計算（"+lenLabel(b.length)+"）"],["合約更新提醒日",b.start?slash(renew):"—"],["WEB平台",(b.web||[]).join("、")],["二次利用",b.second],["AI 修圖 / 影片生成",b.ai],["綁競品（成分 / 功効）",b.ci+" / "+b.ce],["保密合約",b.nda]])+
     sec("腳本與備考",[["腳本",b.script?(isUrl?'<a href="'+esc(b.script)+'" target="_blank" rel="noopener">開啟腳本連結</a><div class="meta">'+esc(b.script)+'</div>':esc(b.script)):"—",true],["備考",b.note]])+
@@ -575,8 +617,9 @@ function openEditBk(id){
   $("e-title").textContent="編輯 "+bkName(b);
   const sibN=bookings.filter(x=>x.shoot===b.shoot&&x.id!==b.id&&counts(x)).length;
   $("e-fixed").textContent=a.name+"（"+b.actor+"）・"+b.product+"　｜　演員和商品不能修改，要換請取消後重新預約。"+(locked?"　已拍攝或已請款：拍攝日期、時數與拍攝需求已鎖定。":"");
-  $("e-date").value=b.date; $("e-date").disabled=locked; $("e-date").dataset.orig=b.date;
-  $("e-date-hint").textContent = sibN ? "同場還有 "+sibN+" 支素材" : ""; $("e-date").dataset.sib=sibN;
+  $("e-date-show").textContent = b.status==="待確認" ? "候選："+(b.cands||[b.date]).map(shortW).join("、") : "🔒 "+slashW(b.date);
+  $("e-resched").classList.toggle("hidden", locked || !(b.status==="待確認"||b.status==="已確認"));
+  $("e-date-hint").textContent = sibN ? "同場還有 "+sibN+" 支素材；「改期」只改這一支" : "";
 
   $("e-hours").innerHTML=$("b-hours").innerHTML;
   $("e-mno").value=b.mno||""; $("e-title-in").value=b.title; $("e-role").value=b.role; $("e-hours").value=String(b.hours);
@@ -589,38 +632,151 @@ function openEditBk(id){
 $("d-edit").onclick=()=>openEditBk($("d-edit").dataset.id);
 $("d-out").onclick=()=>{ const b=bookings.find(x=>x.id===$("d-out").dataset.id); if(!b) return; $("detail").close(); openReceipt(b); };
 $("d-copy").onclick=async()=>{ const b=bookings.find(x=>x.id===$("d-copy").dataset.id); if(!b) return; $("d-msg").textContent = await copyText(receiptText(b)) ? "已複製，到 LINE 貼上就可以了" : "複製失敗"; };
-$("e-date").addEventListener("change",()=>{ const ch=$("e-date").value!==$("e-date").dataset.orig; const n=Number($("e-date").dataset.sib||0);
-  $("e-date-hint").textContent = ch ? "改期後這支素材會獨立成 "+slash($("e-date").value)+" 的拍攝"+(n?"，同場其他 "+n+" 支留在原日期":"") : (n?"同場還有 "+n+" 支素材":""); });
+$("e-resched").onclick=()=>{ const b=editingBk; if(!b) return; $("editbk").close("cancel"); openResched([b.id]); };
 $("editbk").addEventListener("click",e=>{ if(e.target===$("editbk")) $("editbk").close("cancel"); });
 $("e-save").onclick=async()=>{
   const b=editingBk; const err=t=>{$("e-msg").innerHTML='<div class="msg err">'+esc(t)+'</div>';};
   const title=$("e-title-in").value.trim(); if(!title) return err("請填寫素材篇名。"); if(!$("e-mno").value.trim()) return err("請填寫素材管理編號。");
-  const role=$("e-role").value, hours=Number($("e-hours").value), newDate=$("e-date").value||b.date;
-  const dateChanged = newDate!==b.date;
+  const role=$("e-role").value, hours=Number($("e-hours").value);
   const sibs = bookings.filter(x=>x.shoot===b.shoot&&x.id!==b.id&&counts(x));
-  const moveAll = false;   /* 改期只移動這一支素材：換到另一天就成為那天的拍攝（那天已有拍攝則併入） */
-  const group = moveAll ? [b,...sibs] : [b];
-  const groupIds = group.map(x=>x.id);
-  // KOC：搬過去的 KOC 素材都要重新檢查
-  for(const x of group){ const r = x===b ? role : x.role; const kl=kocLock(x.actor,x.product,r,newDate,x.id); if(kl && !groupIds.includes(kl.id)) return err((x===b?"":"同場的「"+x.title+"」：")+"這位演員已幫 "+kl.product+" 拍 KOC，不能"+(x===b&&r!==b.role?"改成":"在這天拍")+" KOC。"); }
-  // 時數：目的地那一場加總
-  const target = dateChanged ? activeShoots(newDate).find(sh=>sh.actor===b.actor && sh.id!==b.shoot) : null;
-  const groupHours = group.reduce((t,x)=>t+(x===b?hours:Number(x.hours||0)),0);
-  const baseHours = dateChanged ? (target?target.hours:0) + (moveAll?0:0) : sibs.reduce((t,x)=>t+Number(x.hours||0),0);
-  const total = dateChanged ? baseHours + groupHours : baseHours + hours;
-  if(total>CAP && !$("e-otok").checked){ $("e-otok-wrap").classList.remove("hidden"); return err((dateChanged&&target?"新日期這位演員已有拍攝，":"")+"這場加總 "+total+" 小時，超過上限 "+CAP+" 小時。請縮短時數、換日期，或勾選已確認超時。"); }
+  const kl=kocLock(b.actor,b.product,role,b.date,b.id); if(kl && role!==b.role) return err("這位演員已幫 "+kl.product+" 拍 KOC，不能改成 KOC。");
+  const total = sibs.reduce((t,x)=>t+Number(x.hours||0),0) + hours;
+  if(total>CAP && !$("e-otok").checked){ $("e-otok-wrap").classList.remove("hidden"); return err("這場加總 "+total+" 小時，超過上限 "+CAP+" 小時。請縮短時數，或勾選已確認超時。"); }
   const names={mno:"素材管理編號",title:"素材篇名",role:"拍攝需求",hours:"時數",place:"地點",team:"組別",start:"OA日",script:"腳本",note:"備考"};
   const next={mno:$("e-mno").value.trim(),title,role,hours,place:$("e-place").value.trim(),team:$("e-team").value,start:$("e-start").value,script:$("e-script").value.trim(),note:$("e-note").value.trim()};
   const changed=Object.keys(next).filter(k=>String(b[k]??"")!==String(next[k]??""));
-  if(!changed.length && !dateChanged){ $("editbk").close(); return; }
+  if(!changed.length){ $("editbk").close(); return; }
   $("e-save").disabled=true;
   const res = await call("update_booking",{p_id:b.id,p_material_no:next.mno,p_title:title,p_role:role,p_hours:hours,p_place:next.place||null,p_team:next.team,
-    p_start:next.start||null,p_script:next.script||null,p_note:next.note||null,p_date:newDate,p_move_all:false,p_overtime_ok:$("e-otok").checked},{quiet:true});
+    p_start:next.start||null,p_script:next.script||null,p_note:next.note||null,p_overtime_ok:$("e-otok").checked},{quiet:true});
   $("e-save").disabled=false;
   if(res.error) return err(res.error);
   $("editbk").close();
-  toast("已更新 "+bkName(next)+(changed.length?"（"+changed.map(k=>names[k]).join("、")+"）":"")+(dateChanged?"，改期到 "+slash(newDate)+"，請 Casting 重新確認檔期":""), null);
+  toast("已更新 "+bkName(next)+(changed.length?"（"+changed.map(k=>names[k]).join("、")+"）":""), null);
 };
+
+/* 預約總表：鎖定日期（大廣或 Casting） */
+let lockingShoot=null;
+function openLock(id){
+  const sh=shootById(id); if(!sh) return; lockingShoot=sh;
+  const a=actorById(sh.actor)||{name:sh.actor}, td=fmt(today);
+  $("lk-info").textContent=a.name+"（"+sh.actor+"）・"+sh.live.length+" 支素材・"+sh.hours+" 小時："+sh.live.map(b=>b.product+"「"+b.title+"」").join("、");
+  $("lk-opts").innerHTML=sh.cands.map(d=>{
+    const wd=workdaysBetween(td,d), other=lockedShootOn(sh.actor,d,sh.id), tot=sh.hours+(other?other.hours:0);
+    const koc=sh.live.filter(b=>b.role==="KOC").map(b=>kocLock(b.actor,b.product,"KOC",d,b.id)).find(Boolean);
+    const bad = d<=td ? "已經過了" : (other&&other.status==="已拍攝") ? "那天已拍攝完成" : koc ? "已綁 "+koc.product+" 的 KOC" : "";
+    const notes = bad ? [bad] : [lockOK(d) ? "✅ 還有 "+wd+" 個工作天" : "⚠ 只剩 "+wd+" 個工作天，保險時程不足"];
+    if(!bad && other) notes.push("會和同日已鎖定的拍攝合併，共 "+tot+" 小時"+(tot>CAP?"（超過 "+CAP+" 小時）":""));
+    return '<label class="lk-opt'+(bad?' dis':lockOK(d)?'':' late')+'"><input type="radio" name="lk-d" value="'+d+'" data-tot="'+tot+'" data-merge="'+(other?1:0)+'"'+(bad?' disabled':'')+'><span class="lk-d">'+esc(slashW(d))+'</span><span class="lk-n">'+esc(notes.join("・"))+'</span></label>';
+  }).join("");
+  $("lk-warn").innerHTML=""; $("lk-msg").innerHTML=""; $("lk-otok").checked=false; $("lk-otok-wrap").classList.add("hidden"); $("lk-ok").disabled=true;
+  $("lockdlg").showModal();
+}
+$("lk-opts").addEventListener("change",e=>{ const r=e.target.closest("input[name=lk-d]"); if(!r) return; const d=r.value;
+  $("lk-ok").disabled=false; $("lk-otok-wrap").classList.toggle("hidden", Number(r.dataset.tot)<=CAP); $("lk-msg").innerHTML="";
+  $("lk-warn").innerHTML = lockOK(d) ? "" : '<div class="msg err">離拍攝只剩 '+workdaysBetween(fmt(today),d)+' 個工作天，Mia 辦保險需要 10 個工作天（鎖定當天算第 1 天）。仍可鎖定，通告單會標示【急件】。</div>'; });
+$("lk-x").onclick=$("lk-cancel").onclick=()=>$("lockdlg").close();
+$("lockdlg").addEventListener("click",e=>{ if(e.target===$("lockdlg")) $("lockdlg").close(); });
+$("lk-ok").onclick=async()=>{
+  const r=$("lk-opts").querySelector("input[name=lk-d]:checked"); if(!r) return; const d=r.value, sh=lockingShoot, merged=r.dataset.merge==="1";
+  if(Number(r.dataset.tot)>CAP && !$("lk-otok").checked){ $("lk-msg").innerHTML='<div class="msg err">這天加總超過 '+CAP+' 小時，請勾選「已和 Casting 公司確認超時」，或選其他日期。</div>'; return; }
+  $("lk-ok").disabled=true;
+  const res=await call("lock_shoot",{p_shoot:sh.id,p_date:d,p_overtime_ok:$("lk-otok").checked},{quiet:true});
+  $("lk-ok").disabled=false;
+  if(res.error){ $("lk-msg").innerHTML='<div class="msg err">'+esc(res.error)+'</div>'; return; }
+  $("lockdlg").close();
+  const nb=bookings.find(b=>b.id===sh.live[0].id); const newShoot=(nb&&nb.shoot)||sh.id;
+  toast("已鎖定 "+slashW(d)+(merged?"，併入同日拍攝":"")+(lockOK(d)?"":"（保險時程不足）"), merged ? null : async()=>{ if(await call("set_shoot_status",{p_shoot:newShoot,p_to:"待確認"})) toast("已解除鎖定",null); });
+  if(role!=="casting") openNotice(newShoot);
+};
+
+/* 預約總表：改期（重新給候選日，解除鎖定） */
+let reschIds=[];
+function openResched(ids){
+  const items=bookings.filter(b=>ids.includes(b.id)&&counts(b)); if(!items.length) return; reschIds=items.map(b=>b.id);
+  const a=actorById(items[0].actor)||{name:items[0].actor}; const wasLocked=items.some(b=>b.status==="已確認");
+  $("rs-info").textContent=a.name+"（"+items[0].actor+"）・"+items.length+" 支素材："+items.map(b=>b.product+"「"+b.title+"」").join("、")
+    +"　｜　目前："+(wasLocked?"🔒 "+slashW(items[0].date):"候選 "+items[0].cands.map(shortD).join("、"));
+  const minD=minShootDate();
+  ["rs-d1","rs-d2","rs-d3"].forEach(id=>{ $(id).value=""; $(id).min=isAdmin?"":minD; });
+  $("rs-hint").textContent="最早可選 "+slashW(minD)+"。改期後會解除鎖定，需重新鎖定日期"+(wasLocked?"；送出後會提醒你通知 Mia 暫停辦理保險":"")+"。";
+  $("rs-msg").innerHTML=""; $("rs-otok").checked=false; $("rs-otok-wrap").classList.add("hidden");
+  $("rsdlg").showModal();
+}
+$("rs-x").onclick=$("rs-cancel").onclick=()=>$("rsdlg").close();
+$("rsdlg").addEventListener("click",e=>{ if(e.target===$("rsdlg")) $("rsdlg").close(); });
+$("rs-ok").onclick=async()=>{
+  const err=t=>{$("rs-msg").innerHTML='<div class="msg err">'+esc(t)+'</div>';};
+  const dates=[...new Set(["rs-d1","rs-d2","rs-d3"].map(id=>$(id).value).filter(Boolean))].sort();
+  if(!dates.length) return err("請至少選 1 個新的候選日。");
+  const minD=minShootDate(), early=!isAdmin&&dates.find(d=>d<minD); if(early) return err("候選日 "+slash(early)+" 太早了：最早只能選 "+slash(minD)+"（10 個工作天後）。");
+  const items=bookings.filter(b=>reschIds.includes(b.id)); const before=items.map(b=>({...b})); const wasLocked=items.some(b=>b.status==="已確認");
+  const grp=pendingGroup(items[0].actor,dates,reschIds); const tot=items.reduce((t,b)=>t+Number(b.hours||0),0)+(grp?grp.hours:0);
+  if(tot>CAP && !$("rs-otok").checked){ $("rs-otok-wrap").classList.remove("hidden"); return err("這場加總 "+tot+" 小時，超過上限 "+CAP+" 小時。請勾選已確認超時，或換其他日期。"); }
+  $("rs-ok").disabled=true;
+  const res=await call("set_candidates",{p_ids:reschIds,p_dates:dates,p_overtime_ok:$("rs-otok").checked},{quiet:true});
+  $("rs-ok").disabled=false;
+  if(res.error) return err(res.error);
+  $("rsdlg").close();
+  toast("已改期，新的候選日："+dates.map(shortD).join("、")+"，請重新鎖定日期",null);
+  if(wasLocked && role!=="casting") showReschedNotice(before, dates);
+};
+
+/* 通告單（寄給 Mia：保險與合約） */
+const MIA = () => (window.CASTING_CONFIG||{}).MIA_EMAIL || "";
+const mailto = (to,subj,body) => "mailto:"+encodeURIComponent(to)+"?subject="+encodeURIComponent(subj)+"&body="+encodeURIComponent(body);
+const localDay = iso => iso ? fmt(new Date(iso)) : fmt(today);
+let noticeCur=null;
+function showNotice(n){
+  noticeCur=n;
+  const row=(l,v)=>'<div class="r-row"><span>'+esc(l)+'</span><span>'+esc(v)+'</span></div>';
+  $("n-body").innerHTML='<div class="r-shop" id="n-title">'+esc(n.heading)+'</div><div class="r-sub">'+esc(n.sub)+'</div><div class="r-cut"></div>'+
+    (n.urgent?'<div class="n-urgent">'+esc(n.urgent)+'</div>':'')+n.rows.map(r=>r==="cut"?'<div class="r-cut"></div>':r[0]==="#"?'<div class="r-lbl">'+esc(r.slice(1))+'</div>':row(r[0],r[1])).join("")+
+    '<div class="r-cut"></div><div class="r-thanks">CASTING DRIVE-THRU</div>';
+  $("n-mail").href=mailto(MIA(),n.subject,n.text); $("n-msg").textContent="";
+  $("notice").showModal();
+}
+function termsRows(b){ return [["肖像權期間",lenLabel(b.length)+"（依各素材 OA 日起算）"],["合約更新提醒","到期前 "+b.renew+" 天"],["WEB 平台",(b.web||[]).join("、")||"—"],["二次利用",b.second||"—"],["AI 修圖 / 影片生成",b.ai||"—"],["綁競品（成分 / 功效）",(b.ci||"—")+" / "+(b.ce||"—")],["保密合約",b.nda||"—"],["拍攝費",(money(b.fee)||"—")+" / 人次"],["超時費",(money(b.ot)||"—")+" / 小時"]]; }
+function openNotice(shootId){
+  const sh=shootById(shootId); if(!sh||!sh.active) return;
+  const a=actorById(sh.actor)||{name:sh.actor}; const live=sh.live.slice().sort((x,y)=>x.id.localeCompare(y.id)); const b0=live[0];
+  const lockDay=localDay(b0.lockedAt), wd=workdaysBetween(lockDay,sh.date), urgent=sh.date<addWorkdays(lockDay,LOCK_WD);
+  const due=subWorkdays(sh.date,1), places=[...new Set(live.map(b=>b.place).filter(Boolean))].join("、")||"未填";
+  const items=live.map((b,i)=>(i+1)+". "+bkName(b)+"｜"+b.product+"・"+b.team+"｜"+b.role+"｜"+b.title+"｜"+b.hours+" 小時");
+  const terms=termsRows(b0);
+  const text=["Mia 您好：","","以下演員的拍攝日期已鎖定，麻煩協助辦理保險與合約，謝謝！",
+    urgent?"【急件】鎖定日到拍攝日只有 "+wd+" 個工作天，保險時程不足，請協助趕件或回覆是否可行。":null,"",
+    "■ 拍攝日："+slashW(sh.date)+"（已鎖定）","■ 保險需完成："+slashW(due)+" 前","■ 演員："+a.name+"（"+sh.actor+"）","■ 拍攝地點："+places,"■ 預估總時數："+sh.hours+" 小時","",
+    "■ 拍攝內容（共 "+live.length+" 支"+(live.length>1?"，同日同場算 1 人次":"")+"）",...items,"",
+    "■ 合約條件",...terms.map(t=>t[0]+"："+t[1]),"",
+    "登記人："+[...new Set(live.map(b=>b.by))].join("、")+"　鎖定："+(b0.lockedBy||"")+" "+shortD(lockDay),
+    "平台連結："+location.origin+location.pathname,"","※ 演員本名、身分證字號等保險所需個資，請向 Casting 公司（阿森）索取。"].filter(x=>x!==null).join("\n");
+  showNotice({heading:"通告單", sub:"保險・合約用（寄給 Mia）", urgent: urgent?"【急件】鎖定到拍攝只有 "+wd+" 個工作天":"",
+    subject:(urgent?"【急件】":"")+"【通告】"+a.name+" "+slashW(sh.date)+"（"+live.length+" 支素材）", text,
+    file:"通告單_"+a.name+"_"+sh.date,
+    rows:[["拍攝日","🔒 "+slashW(sh.date)],["保險需完成",slashW(due)+" 前"],["演員",a.name+"（"+sh.actor+"）"],["拍攝地點",places],["預估總時數",sh.hours+" 小時"],"cut","#拍攝內容（共 "+live.length+" 支）",
+      ...live.map(b=>[bkName(b),b.product+"・"+b.role+"・"+b.title+"・"+b.hours+"h"]),"cut","#合約條件",...terms,"cut",["登記人",[...new Set(live.map(b=>b.by))].join("、")],["鎖定",(b0.lockedBy||"")+" "+shortD(lockDay)]]});
+}
+function showCancelNotice(b){
+  const a=actorById(b.actor)||{name:b.actor}; const left=bookings.filter(x=>x.shoot===b.shoot&&x.id!==b.id&&counts(x));
+  const text=["Mia 您好：","","以下素材已取消，若已開始辦理保險或合約，請先暫停，謝謝！","",
+    "■ 演員："+a.name+"（"+b.actor+"）","■ 原拍攝日："+slashW(b.date),"■ 取消素材："+bkName(b)+"｜"+b.product+"・"+b.role+"｜"+b.title,"",
+    left.length?"同場其他 "+left.length+" 支素材照常拍攝："+left.map(x=>bkName(x)+" "+x.title).join("、"):"這位演員當天的拍攝已全部取消。",
+    "","平台連結："+location.origin+location.pathname].join("\n");
+  showNotice({heading:"取消通知", sub:"已鎖定的素材被取消，請通知 Mia", urgent:"", subject:"【取消】"+a.name+" "+slashW(b.date)+" "+bkName(b), text, file:"取消通知_"+a.name+"_"+b.date,
+    rows:[["演員",a.name+"（"+b.actor+"）"],["原拍攝日",slashW(b.date)],["取消素材",bkName(b)+" "+b.title],["同場其他素材",left.length?left.length+" 支照常拍攝":"全部取消"]]});
+}
+function showReschedNotice(items, dates){
+  const b=items[0], a=actorById(b.actor)||{name:b.actor};
+  const text=["Mia 您好：","","以下通告已改期，原日期的保險與合約請先暫停；新日期鎖定後會再寄通告單，謝謝！","",
+    "■ 演員："+a.name+"（"+b.actor+"）","■ 原拍攝日："+slashW(b.date)+"（已解除鎖定）","■ 新的候選日："+dates.map(slashW).join("、"),
+    "■ 素材："+items.map(x=>bkName(x)+" "+x.title).join("、"),"","平台連結："+location.origin+location.pathname].join("\n");
+  showNotice({heading:"改期通知", sub:"已鎖定的通告改期，請通知 Mia", urgent:"", subject:"【改期】"+a.name+" 原 "+slashW(b.date)+"（"+items.length+" 支素材）", text, file:"改期通知_"+a.name+"_"+b.date,
+    rows:[["演員",a.name+"（"+b.actor+"）"],["原拍攝日",slashW(b.date)],["新的候選日",dates.map(shortW).join("、")],["素材",items.length+" 支"]]});
+}
+$("n-copy").onclick=async()=>{ if(!noticeCur) return; $("n-msg").textContent = await copyText(noticeCur.text) ? "已複製，可以貼到 LINE 或 email" : "複製失敗"; };
+$("n-img").onclick=()=>{ if(noticeCur) saveNodeImage($("n-body"), noticeCur.file, $("n-msg")); };
+$("notice").addEventListener("click",e=>{ if(e.target===$("notice")) $("notice").close(); });
 
 /* 預約總表：刪除（需填原因） */
 let deletingBk=null;
@@ -659,7 +815,7 @@ const LHEAD=["期數・人次","拍攝日期","演員編號","演員","商品","
 function listRows(){
   const src = $("l-scope").value==="all" ? bookings : cycBk(); const st=$("l-status").value;
   return src.filter(b=>st ? b.status===st : b.status!=="已刪除").sort((x,y)=>x.date.localeCompare(y.date)||x.shoot.localeCompare(y.shoot)||x.id.localeCompare(y.id))
-    .map(b=>[(()=>{ const sh=shootsIn(bookings.filter(x=>x.shoot===b.shoot)).find(Boolean); return sh?shootLabel(sh):""; })(),slash(b.date),b.actor,(actorById(b.actor)||{}).name||"",b.product,b.team,b.role,b.mno||"",b.title,Number(b.hours),b.place||"",slash(b.start),slash(endOf(b.start,b.length)),b.by,b.status,b.script||"",b.note||""]);
+    .map(b=>[(()=>{ const sh=shootsIn(bookings.filter(x=>x.shoot===b.shoot)).find(Boolean); return sh?shootLabel(sh):""; })(),(b.status==="待確認"?"候選 "+(b.cands||[b.date]).map(slash).join("、"):slash(b.date)),b.actor,(actorById(b.actor)||{}).name||"",b.product,b.team,b.role,b.mno||"",b.title,Number(b.hours),b.place||"",slash(b.start),slash(endOf(b.start,b.length)),b.by,stLabel(b.status),b.script||"",b.note||""]);
 }
 $("l-copy").addEventListener("click",async()=>{
   const btn=$("l-copy"); const text=[LHEAD.join("\t"),...listRows().map(r=>r.map(v=>String(v).replace(/[\t\n]/g," ")).join("\t"))].join("\n");
@@ -774,19 +930,22 @@ function mapBooking(r, logs){
   return { id:r.id, shoot:r.shoot_id, cycle:r.cycle_no, date:r.shoot_date, hours:Number(r.hours), actor:r.actor_id, product:r.product, team:r.team||"",
     role:r.role_type, mno:r.material_no||"", title:r.title, place:r.place||"", by:r.booked_by_name||"—", start:r.start_date||"", script:r.script||"",
     note:r.note||"", inv:r.invoice_date||"", status:r.status, length:r.portrait_months, renew:r.renew_days, web:r.web||[], second:r.second_use,
-    ai:r.ai_use, ci:r.comp_ingredient, ce:r.comp_effect, fee:r.shoot_fee??"", ot:r.overtime_fee??"", nda:r.nda||"", log:(logs&&logs[r.id])||[] };
+    ai:r.ai_use, ci:r.comp_ingredient, ce:r.comp_effect, fee:r.shoot_fee??"", ot:r.overtime_fee??"", nda:r.nda||"", log:(logs&&logs[r.id])||[],
+    cands:(r.cand_dates&&r.cand_dates.length?r.cand_dates.slice():[r.shoot_date]).sort(), lockedAt:r.locked_at||"", lockedBy:r.locked_by_name||"" };
 }
 function mapLog(l){ return { at:fmtStamp(l.at), who:l.by_name||"", from:l.from_status||"建立", to:l.to_status }; }
 
 async function reload(silent){
   if(!silent) busy(true);
-  const [A,B,C,L,D] = await Promise.all([
+  const [A,B,C,L,D,H] = await Promise.all([
     sb.from("actors").select("*").order("id"),
     sb.from("bookings").select("*").order("id"),
     sb.from("cycles").select("*"),
     sb.from("status_log").select("*").order("at"),
-    sb.from("deleted_bookings").select("*").order("deleted_at")
+    sb.from("deleted_bookings").select("*").order("deleted_at"),
+    sb.from("tw_offdays").select("d")
   ]);
+  offdays = new Set(((H&&H.data)||[]).map(x=>x.d));
   const err = A.error||B.error||C.error||L.error||D.error;
   if(err){ if(!silent) busy(false); toast("資料載入失敗："+errText(err),null); return; }
   const logs={}; (L.data||[]).forEach(l=>{ (logs[l.booking_id]=logs[l.booking_id]||[]).push(mapLog(l)); });

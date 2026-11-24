@@ -4,5 +4,7 @@ window.CASTING_CONFIG = {
   SUPABASE_URL: "https://obiiqtdbrifmwvskvpkx.supabase.co",
   SUPABASE_KEY: "sb_publishable_ZA_2aKGf3nHFdUVvTS1ZvA_5U6sCUwv",
   /* 預約總表「✉ 通知阿森」寄到這裡；要換人只要改這一行 */
-  CASTING_NOTIFY_EMAIL: "176331@gmail.com"
+  CASTING_NOTIFY_EMAIL: "176331@gmail.com",
+  /* 通告單「✉ 寄給 Mia」（保險・合約）寄到這裡 */
+  MIA_EMAIL: "miafang@daiko.tw"
 };

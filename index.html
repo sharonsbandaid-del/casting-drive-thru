@@ -111,6 +111,25 @@ table.xl th.red{color:#c0392b}
 table.xl td{border:1px solid var(--line);text-align:center;font-size:13px;vertical-align:middle}
 table.xl td.prod{font-weight:500}
 table.xl tr.due td{background:color-mix(in srgb,var(--warn) 14%,transparent)}
+.cands{display:flex;gap:6px}
+.cands input{flex:1;min-width:0}
+.cand-list{display:flex;flex-direction:column;gap:2px;align-items:flex-start}
+.cand{font-size:13px;white-space:nowrap}
+.cand.late{color:#b3b3b3;text-decoration:line-through}
+.lockd{font-weight:600;white-space:nowrap}
+.lk-opts{display:flex;flex-direction:column;gap:8px;margin:12px 0}
+.lk-opt{display:grid;grid-template-columns:auto auto 1fr;gap:10px;align-items:center;padding:10px 12px;border:1px solid #e3e0d6;border-radius:10px;cursor:pointer;background:#fff}
+.lk-opt:has(input:checked){border-color:var(--red,#d7261e);box-shadow:0 0 0 2px color-mix(in srgb,var(--red,#d7261e) 25%,transparent)}
+.lk-opt.late .lk-n{color:var(--red,#d7261e)}
+.lk-opt.dis{opacity:.5;cursor:not-allowed}
+.lk-d{font-weight:600;white-space:nowrap}
+.lk-n{font-size:13px;color:#555}
+.rs-lbl{display:flex;flex-direction:column;gap:6px;margin:10px 0}
+.e-datebox{display:flex;flex-direction:column;gap:4px;font-size:13px}
+.e-datebox #e-date-show{font-size:15px;font-weight:600}
+.e-datebox .btn{align-self:flex-start}
+.n-urgent{background:var(--red,#d7261e);color:#fff;font-weight:700;text-align:center;padding:6px;border-radius:6px;margin:6px 0}
+a.btn.r-btn{text-decoration:none;display:inline-flex;align-items:center;color:var(--black,#27251f)}
 a.btn.notify{text-decoration:none;display:inline-block;white-space:nowrap;color:var(--black,#27251f)}
 table.xl tr.expired td{background:#efefef;color:#8a8a8a}
 table.xl tr.expired .thumb{opacity:.55}
@@ -484,7 +503,7 @@ table.xl td.rem{text-align:left;white-space:normal;min-width:240px}
         <label>素材管理編號<input type="text" id="b-mno" placeholder="例：EX-2611-03" required></label>
         <label>素材篇名<input type="text" id="b-title" placeholder="例：冬季保濕篇" required></label>
         <label>拍攝需求<select id="b-role"><option>情境演員</option><option>KOC</option><option>手部 / 局部演員</option><option>主播</option></select></label>
-        <label>拍攝日期<input type="date" id="b-date" required></label>
+        <label class="span2">拍攝日期（候選，最多 3 個）<div class="cands"><input type="date" id="b-date" required aria-label="候選日 1"><input type="date" id="b-date2" aria-label="候選日 2（選填）"><input type="date" id="b-date3" aria-label="候選日 3（選填）"></div><span class="hint" id="b-date-hint"></span></label>
         <label>預估拍攝時數<select id="b-hours"><option value="1">1 小時</option><option value="1.5">1.5 小時</option><option value="2" selected>2 小時</option><option value="2.5">2.5 小時</option><option value="3">3 小時</option><option value="3.5">3.5 小時</option><option value="4">4 小時</option><option value="5">5 小時</option><option value="5.5">5.5 小時</option><option value="6">6 小時（整天）</option></select><span class="hint">含換裝、走位</span></label>
         <label>拍攝地點<input type="text" id="b-place" placeholder="例：內湖攝影棚"></label>
         <label>負責組別<select id="b-team"><option>花花組</option><option>泡泡組</option><option>啾啾組</option><option>毛毛組</option><option>CRM組</option></select></label>
@@ -505,14 +524,14 @@ table.xl td.rem{text-align:left;white-space:normal;min-width:240px}
         <label class="wide">備考（角色需求、注意事項）<textarea id="b-note" rows="2" placeholder="例：需自備服裝、有 2 句台詞、已簽保密合約"></textarea></label>
       </div>
       <div id="b-msg"></div>
-      <div class="bar"><span class="note grow">送出後狀態為「待確認」，由 Casting 公司確認檔期。取消的預約不計入額度。</span><button class="btn primary" type="submit">送出預約</button></div>
+      <div class="bar"><span class="note grow">送出後狀態為「待敲定」，由 Casting 或大廣從候選日中鎖定一天。取消的預約不計入額度。</span><button class="btn primary" type="submit">送出預約</button></div>
     </form>
   </section>
 
   <!-- 預約總表 -->
   <section id="tab-list" class="hidden">
     <div class="bar" style="margin-bottom:12px">
-      <select id="l-status" aria-label="篩選狀態"><option value="">全部狀態</option><option>待確認</option><option>已確認</option><option>已拍攝</option><option>已取消</option><option>已刪除</option></select>
+      <select id="l-status" aria-label="篩選狀態"><option value="">全部狀態</option><option value="待確認">待敲定</option><option>已確認</option><option>已拍攝</option><option>已取消</option><option>已刪除</option></select>
       <select id="l-scope" aria-label="範圍"><option value="cycle">目前期數</option><option value="all">全部期數</option></select>
       <span class="note grow" id="l-hint"></span>
       <button class="btn" id="l-copy">複製表格</button>
@@ -617,7 +636,7 @@ table.xl td.rem{text-align:left;white-space:normal;min-width:240px}
     <label>素材管理編號<input type="text" id="e-mno"></label>
     <label class="span2">素材篇名<input type="text" id="e-title-in"></label>
     <label>拍攝需求<select id="e-role"><option>情境演員</option><option>KOC</option><option>手部 / 局部演員</option><option>主播</option></select></label>
-    <label>拍攝日期<input type="date" id="e-date"><span class="hint" id="e-date-hint"></span></label>
+    <div class="e-datebox">拍攝日期<div id="e-date-show"></div><button type="button" class="btn sm ghost" id="e-resched">改期</button><span class="hint" id="e-date-hint"></span></div>
     <label>預估拍攝時數<select id="e-hours"></select></label>
     <label>拍攝地點<input type="text" id="e-place"></label>
     <label>負責組別<select id="e-team"><option>花花組</option><option>泡泡組</option><option>啾啾組</option><option>毛毛組</option><option>CRM組</option></select></label>
@@ -629,6 +648,9 @@ table.xl td.rem{text-align:left;white-space:normal;min-width:240px}
   <div id="e-msg"></div>
   <div class="bar" style="justify-content:flex-end;margin-top:10px"><button class="btn" value="cancel" formnovalidate>取消</button><button class="btn primary" id="e-save" type="button">儲存修改</button></div>
 </form></dialog>
+<dialog id="lockdlg" class="detail-dlg" style="width:min(560px,94vw)" aria-labelledby="lk-title"><div class="dlg-head"><h3 id="lk-title" style="margin:0">🔒 鎖定拍攝日期</h3><button class="dlg-x" id="lk-x" aria-label="關閉視窗">×</button></div><p class="meta" id="lk-info"></p><div class="lk-opts" id="lk-opts" role="radiogroup" aria-label="候選日期"></div><div id="lk-warn"></div><label class="otok hidden" id="lk-otok-wrap"><input type="checkbox" id="lk-otok"> 已和 Casting 公司確認超時，超過 6 小時的部分依演員卡超時費計算</label><div id="lk-msg"></div><div class="bar" style="justify-content:flex-end;margin-top:12px"><button class="btn ghost" id="lk-cancel">取消</button><button class="btn primary" id="lk-ok" disabled>鎖定這一天</button></div></dialog>
+<dialog id="rsdlg" class="detail-dlg" style="width:min(560px,94vw)" aria-labelledby="rs-title"><div class="dlg-head"><h3 id="rs-title" style="margin:0">改期</h3><button class="dlg-x" id="rs-x" aria-label="關閉視窗">×</button></div><p class="meta" id="rs-info"></p><label class="rs-lbl">新的候選日期（最多 3 個）<div class="cands"><input type="date" id="rs-d1" aria-label="候選日 1"><input type="date" id="rs-d2" aria-label="候選日 2（選填）"><input type="date" id="rs-d3" aria-label="候選日 3（選填）"></div><span class="hint" id="rs-hint"></span></label><label class="otok hidden" id="rs-otok-wrap"><input type="checkbox" id="rs-otok"> 已和 Casting 公司確認超時</label><div id="rs-msg"></div><div class="bar" style="justify-content:flex-end;margin-top:12px"><button class="btn ghost" id="rs-cancel">取消</button><button class="btn primary" id="rs-ok">送出改期</button></div></dialog>
+<dialog id="notice" class="receipt-dlg" aria-labelledby="n-title"><div class="receipt notice" id="n-body"></div><div class="r-msg" id="n-msg" role="status"></div><form method="dialog" class="r-actions"><a class="btn r-btn" id="n-mail" href="#">✉ 寄給 Mia</a><button type="button" class="btn r-btn" id="n-copy">複製文字</button><button type="button" class="btn r-btn" id="n-img">存成圖片</button><button class="btn primary" value="ok">關閉</button></form></dialog>
 <dialog id="receipt" class="receipt-dlg" aria-labelledby="r-title"><div class="receipt" id="r-body"></div><div class="r-msg" id="r-msg" role="status"></div><form method="dialog" class="r-actions"><button type="button" class="btn r-btn" id="r-img">存成圖片</button><button type="button" class="btn r-btn" id="r-copy">複製文字</button><button class="btn primary" value="ok">收下</button></form></dialog>
 <dialog id="actor-view" class="detail-dlg" aria-labelledby="av-title"><div class="dlg-head"><h3 id="av-title" style="margin:0"></h3><button class="dlg-x" id="av-x" aria-label="關閉視窗">×</button></div><div id="av-body"></div><div class="bar" style="justify-content:flex-end;margin-top:12px"><button class="btn primary" id="av-edit">編輯</button><button class="btn primary" id="av-book">點這位</button></div></dialog>
 <dialog id="actor-dlg">
@@ -679,7 +701,7 @@ table.xl td.rem{text-align:left;white-space:normal;min-width:240px}
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js"></script>
-<script src="config.js?v=202611181904"></script>
-<script src="app.js?v=202611181904"></script>
+<script src="config.js?v=202611241707"></script>
+<script src="app.js?v=202611241707"></script>
 </body>
 </html>
