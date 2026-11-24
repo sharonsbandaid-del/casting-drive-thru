@@ -206,7 +206,7 @@ function renderRows(){
       else if(sh.status==="已確認") act='<div class="acts"><button class="btn sm" data-shoot="'+sh.id+'" data-from="'+sh.status+'" data-to="已拍攝"'+(future?' disabled title="拍攝日當天之後才能標記"':'')+'>'+(future?'拍攝日後可標記':'標記已拍攝')+'</button><button class="btn sm ghost" data-shoot="'+sh.id+'" data-from="'+sh.status+'" data-to="待確認">解除鎖定</button></div>';
       else if(sh.status==="已拍攝") act='<button class="btn sm ghost" data-shoot="'+sh.id+'" data-from="'+sh.status+'" data-to="已確認"'+(invoiced?' disabled title="本期已請款，需先撤銷請款"':'')+'>'+(invoiced?'已請款・鎖定':'撤銷已拍攝')+'</button>';
     } else if(sh.status==="已拍攝"){ act='<div class="acts"><button class="btn sm ghost" data-notice="'+sh.id+'">📋 通告單</button></div><span class="meta">誤標請通知三根木撤銷</span>'; }
-    else if(canLock) act='<div class="acts">'+btnLock+'<a class="btn sm notify" href="'+esc(notifyMailto(sh))+'" data-notify="'+sh.id+'" title="開啟 email，請 Casting 確認檔期">✉ 通知阿森</a><button class="btn sm ghost" data-resched="'+sh.id+'">改期</button></div>';
+    else if(canLock) act='<div class="acts">'+btnLock+'<button class="btn sm" data-notice="'+sh.id+'" title="敲通告：寄給阿森、複製文字或存成圖片">📋 通告單</button><button class="btn sm ghost" data-resched="'+sh.id+'">改期</button></div>';
     else if(sh.status==="已確認") act='<div class="acts"><button class="btn sm" data-notice="'+sh.id+'">📋 通告單</button><button class="btn sm ghost" data-resched="'+sh.id+'">改期</button></div>';
     const dateCell = !sh.active ? esc(sh.date)
       : sh.locked ? '<span class="lockd">🔒 '+esc(slash(sh.date))+'</span>'+((sh.live[0]||{}).lockedBy?'<div class="meta">'+esc(sh.live[0].lockedBy)+' 鎖定</div>':'')
@@ -734,12 +734,13 @@ function showNotice(n){
   $("n-body").innerHTML='<div class="r-shop" id="n-title">'+esc(n.heading)+'</div><div class="r-sub">'+esc(n.sub)+'</div><div class="r-cut"></div>'+
     (n.urgent?'<div class="n-urgent">'+esc(n.urgent)+'</div>':'')+n.rows.map(r=>r==="cut"?'<div class="r-cut"></div>':r[0]==="#"?'<div class="r-lbl">'+esc(r.slice(1))+'</div>':row(r[0],r[1])).join("")+
     '<div class="r-cut"></div><div class="r-thanks">CASTING DRIVE-THRU</div>';
-  $("n-mail").href=mailto(MIA(),n.subject,n.text); $("n-msg").textContent="";
+  $("n-mail").href=mailto(n.to||MIA(),n.subject,n.text); $("n-mail").textContent="✉ 寄給"+(n.toName||"Mia"); $("n-msg").textContent="";
   $("notice").showModal();
 }
 function termsRows(b){ return [["肖像權期間",lenLabel(b.length)+"（依各素材 OA 日起算）"],["合約更新提醒","到期前 "+b.renew+" 天"],["WEB 平台",(b.web||[]).join("、")||"—"],["二次利用",b.second||"—"],["AI 修圖 / 影片生成",b.ai||"—"],["綁競品（成分 / 功效）",(b.ci||"—")+" / "+(b.ce||"—")],["保密合約",b.nda||"—"],["拍攝費",(money(b.fee)||"—")+" / 人次"],["超時費",(money(b.ot)||"—")+" / 小時"]]; }
 function openNotice(shootId){
   const sh=shootById(shootId); if(!sh||!sh.active) return;
+  if(sh.status==="待確認") return openCallSheet(sh);
   const a=actorById(sh.actor)||{name:sh.actor}; const live=sh.live.slice().sort((x,y)=>x.id.localeCompare(y.id)); const b0=live[0];
   const lockDay=localDay(b0.lockedAt), wd=workdaysBetween(lockDay,sh.date), urgent=sh.date<addWorkdays(lockDay,LOCK_WD);
   const due=subWorkdays(sh.date,1), places=[...new Set(live.map(b=>b.place).filter(Boolean))].join("、")||"未填";
@@ -757,6 +758,17 @@ function openNotice(shootId){
     file:"通告單_"+a.name+"_"+sh.date,
     rows:[["拍攝日","🔒 "+slashW(sh.date)],["保險需完成",slashW(due)+" 前"],["演員",a.name+"（"+sh.actor+"）"],["拍攝地點",places],["預估總時數",sh.hours+" 小時"],"cut","#拍攝內容（共 "+live.length+" 支）",
       ...live.map(b=>[bkName(b),b.product+"・"+b.role+"・"+b.title+"・"+b.hours+"h"]),"cut","#合約條件",...terms,"cut",["登記人",[...new Set(live.map(b=>b.by))].join("、")],["鎖定",(b0.lockedBy||"")+" "+shortD(lockDay)]]});
+}
+/* 未鎖定：敲通告單（寄給阿森，請他確認檔期並在平台鎖定） */
+function openCallSheet(sh){
+  const a=actorById(sh.actor)||{name:sh.actor}; const live=sh.live.slice().sort((x,y)=>x.id.localeCompare(y.id));
+  const okC=sh.cands.filter(lockOK), places=[...new Set(live.map(b=>b.place).filter(Boolean))].join("、")||"未填";
+  const u=new URL(notifyMailto(sh));
+  showNotice({heading:"敲通告", sub:"請 Casting 確認檔期並在平台鎖定（寄給阿森）", urgent: okC.length?"":"候選日都不到 10 個工作天，保險可能來不及辦",
+    to:(window.CASTING_CONFIG||{}).CASTING_NOTIFY_EMAIL||"", toName:"阿森",
+    subject:u.searchParams.get("subject")||"", text:u.searchParams.get("body")||"", file:"敲通告_"+a.name+"_"+sh.cands[0],
+    rows:[["演員",a.name+"（"+sh.actor+"）"],["候選日",sh.cands.map(shortW).join("、")],["請於",okC.length?shortW(lockBy(okC[0]))+" 前鎖定":"盡快"],["拍攝地點",places],["預估總時數",sh.hours+" 小時"],"cut","#拍攝內容（共 "+live.length+" 支）",
+      ...live.map(b=>[bkName(b),b.product+"・"+b.role+"・"+b.title+"・"+b.hours+"h"]),...live.filter(b=>b.note).map(b=>["備考 "+bkName(b),b.note]),"cut",["登記人",[...new Set(live.map(b=>b.by))].join("、")]]});
 }
 function showCancelNotice(b){
   const a=actorById(b.actor)||{name:b.actor}; const left=bookings.filter(x=>x.shoot===b.shoot&&x.id!==b.id&&counts(x));
